@@ -4,6 +4,31 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-04-21 — Phase 1 stability pass (env/process fixes), upload unblocked
+### Completed
+- Standardized local env usage around root `.env` and updated run scripts to inject root env for frontend/backend/worker
+- Hardened backend Supabase URL resolution logic (supports both `SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL` fallbacks)
+- Added backend startup diagnostics to log Supabase URL resolution state/source
+- Fixed repeated local process conflicts by isolating active local backend dev runtime to port `8010`
+- Added visible sign-out controls on authenticated frontend pages
+- Fixed frontend upload server action redirect flow to prevent `NEXT_REDIRECT` surfacing as an error
+- Validated upload flow now succeeds locally
+
+### Next
+- Begin Phase 2, Step 1: implement chapter text chunker (~500 words, paragraph-aware)
+- Add processing endpoint skeleton (`POST /books/{id}/chapters/{index}/process`)
+- Start Gemini attribution scaffolding and segment persistence path
+
+### Decisions Made
+- Keep Phase 1 functionally complete; treat this session as a stability/hardening pass
+- Use root `.env` as the primary local source of truth; app-local env files are overrides only
+- Keep backend local dev on `8010` to avoid Windows port conflict residue on `8000`
+
+### Blockers
+- none
+
+---
+
 ## Session 2026-04-21 — Phase 1 completed, local auth/upload flow stabilized
 ### Completed
 - Implemented Phase 1 end-to-end: Supabase auth pages/actions, OAuth callback route, backend Supabase JWT validation, EPUB upload parsing, and books/chapters endpoints
