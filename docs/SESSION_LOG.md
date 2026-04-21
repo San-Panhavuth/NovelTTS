@@ -4,6 +4,30 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-04-21 — Phase 1 completed, local auth/upload flow stabilized
+### Completed
+- Implemented Phase 1 end-to-end: Supabase auth pages/actions, OAuth callback route, backend Supabase JWT validation, EPUB upload parsing, and books/chapters endpoints
+- Added frontend library/upload/book/chapter pages wired to authenticated backend requests
+- Fixed local auth startup issues by using `frontend/.env.local` and removing temporary runtime diagnostics after validation
+- Fixed backend startup failure on Windows by removing broken `backend/.venv/lib64` symlink and recreating the virtual environment
+- Resolved local Postgres port conflicts by remapping docker-compose Postgres host port to `6543` and updating defaults/docs (`docker-compose.yml`, `backend/app/config.py`, `.env.example`, `README.md`)
+- Added frontend backend-call resilience (loopback host retry and clearer timeout errors)
+
+### Next
+- Begin Phase 2, Step 1: implement chapter text chunker (~500 words, paragraph-aware)
+- Add processing pipeline endpoint skeleton (`POST /books/{id}/chapters/{index}/process`) and storage contract for segments
+- Wire Gemini client integration scaffolding for attribution pipeline
+
+### Decisions Made
+- Keep Phase 1 marked complete and move active development focus to Phase 2
+- Use `frontend/.env.local` as the authoritative local frontend env source for Next.js runtime
+- Standardize local docker Postgres host access on `localhost:6543` to avoid collisions with existing Windows Postgres services
+
+### Blockers
+- none
+
+---
+
 ## Session 2026-04-21 — Cloud provisioning completed, ready for Phase 1
 ### Completed
 - Provisioned Supabase project and captured project URL, anon key, and service role key

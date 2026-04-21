@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-noveltts_dev}
       POSTGRES_DB: ${POSTGRES_DB:-noveltts}
     ports:
-      - "5432:5432"
+      - "6543:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -46,6 +46,15 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       APP_NAME: ${APP_NAME:-NovelTTS Backend}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      KOKORO_DEVICE: ${KOKORO_DEVICE:-cpu}
+      EDGE_TTS_DEFAULT_VOICE: ${EDGE_TTS_DEFAULT_VOICE:-en-US-AriaNeural}
     depends_on:
       postgres:
         condition: service_healthy

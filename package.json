@@ -9,9 +9,9 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev:frontend": "pnpm -F frontend dev",
-    "dev:worker": "pnpm -F worker dev",
-    "dev:backend": "cd backend && uv run uvicorn app.main:app --reload --port 8000",
+    "dev:frontend": "dotenv -e .env -- pnpm -F frontend dev",
+    "dev:worker": "dotenv -e .env -- pnpm -F worker dev",
+    "dev:backend": "dotenv -e .env -- uv run --project backend uvicorn --app-dir backend app.main:app --reload --port 8010",
     "lint": "pnpm -r --parallel lint",
     "typecheck": "pnpm -r --parallel typecheck",
     "build": "pnpm -r build",
@@ -21,6 +21,7 @@
     "stack:logs": "docker compose logs -f"
   },
   "devDependencies": {
+    "dotenv-cli": "^8.0.0",
     "prettier": "^3.3.3"
   }
 }

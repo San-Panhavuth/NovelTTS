@@ -2,7 +2,7 @@
 
 NovelTTS turns uploaded EPUB novels into multi-voice audiobooks.
 
-Status: Phase 0 is complete (foundations + cloud provisioning). Next focus is Phase 1 (Auth + EPUB upload flow). See `docs/DEV_PLAN.md` for detailed progress.
+Status: Phase 1 is complete (Auth + EPUB upload flow). Next focus is Phase 2 (Text processing + dialog attribution). See `docs/DEV_PLAN.md` for detailed progress.
 
 Multi-voice audiobook generator from EPUB uploads. Upload an English-translated CN/KR/JP web novel, get back chapter MP3s where each character speaks in a distinct voice.
 
@@ -55,12 +55,17 @@ uv sync
 Set-Location ..
 ```
 
-Create env files:
+Create the root env file (single source):
 
 ```powershell
 Copy-Item .env.example .env
+```
+
+Optional per-app override files (only if needed for local experiments):
+
+```powershell
 Copy-Item frontend/.env.example frontend/.env.local
-Copy-Item backend/.env.example backend/.env
+Copy-Item backend/.env.example backend/.env.local
 Copy-Item worker/.env.example worker/.env
 ```
 
@@ -74,7 +79,7 @@ docker compose ps
 ```
 
 Expected services:
-- `noveltts-postgres` on `localhost:5432`
+- `noveltts-postgres` on `localhost:6543`
 - `noveltts-redis` on `localhost:6379`
 - `noveltts-backend` on `localhost:8000`
 - `noveltts-worker`
@@ -110,6 +115,8 @@ Terminal 4 (worker):
 ```powershell
 pnpm dev:worker
 ```
+
+All three commands above load values from root `.env`.
 
 ## 4) Database Migration (Prisma)
 

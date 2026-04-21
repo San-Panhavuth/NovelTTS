@@ -19,15 +19,11 @@ branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
 
-segment_type_enum = sa.Enum("narration", "dialogue", "thought", name="segmenttype")
-job_status_enum = sa.Enum("queued", "processing", "completed", "failed", name="jobstatus")
+segment_type_enum = sa.Enum("narration", "dialogue", "thought", name="segmenttype", create_type=False)
+job_status_enum = sa.Enum("queued", "processing", "completed", "failed", name="jobstatus", create_type=False)
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    segment_type_enum.create(bind, checkfirst=True)
-    job_status_enum.create(bind, checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=False), primary_key=True),

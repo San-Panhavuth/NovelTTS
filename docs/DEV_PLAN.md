@@ -25,22 +25,22 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 ## Phase 1 — Auth & Upload Flow
 **Goal**: logged-in user uploads an EPUB and sees its chapter list.
 
-- ⬜ Wire Supabase Auth on Next.js (email + Google OAuth)
-- ⬜ FastAPI JWT middleware that validates Supabase JWT
-- ⬜ EPUB upload endpoint: receive file → ebooklib parse → store chapters in DB
-- ⬜ Handle malformed EPUB HTML: strip tags, decode entities, normalize whitespace
-- ⬜ 50MB file size limit + MIME type validation
-- ⬜ REST endpoints: `GET /books`, `GET /books/{id}`, `GET /books/{id}/chapters/{index}`
-- ⬜ Frontend: auth pages (sign up, log in, forgot password)
-- ⬜ Frontend: library page (user's uploaded books)
-- ⬜ Frontend: upload page with drag-and-drop zone
-- ⬜ Frontend: book detail page (chapter list + "Process" button)
+- ✅ Wire Supabase Auth on Next.js (email + Google OAuth)
+- ✅ FastAPI JWT middleware that validates Supabase JWT
+- ✅ EPUB upload endpoint: receive file → ebooklib parse → store chapters in DB
+- ✅ Handle malformed EPUB HTML: strip tags, decode entities, normalize whitespace
+- ✅ 50MB file size limit + MIME type validation
+- ✅ REST endpoints: `GET /books`, `GET /books/{id}`, `GET /books/{id}/chapters/{index}`
+- ✅ Frontend: auth pages (sign up, log in, forgot password)
+- ✅ Frontend: library page (user's uploaded books)
+- ✅ Frontend: upload page with drag-and-drop zone
+- ✅ Frontend: book detail page (chapter list + "Process" button)
 
 **Done when**: logged-in user uploads an EPUB and sees its chapter list.
 
 ---
 
-## Phase 2 — Text Processing & Dialog Attribution
+## Phase 2 — Text Processing & Dialog Attribution 🔄
 **Goal**: any chapter produces a correctable, tagged segment list.
 
 - ⬜ Text chunker: split chapter into ~500-word segments at paragraph boundaries
