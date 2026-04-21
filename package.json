@@ -1,0 +1,26 @@
+{
+  "name": "noveltts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Multi-voice audiobook generator from EPUB uploads",
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:frontend": "pnpm -F frontend dev",
+    "dev:worker": "pnpm -F worker dev",
+    "dev:backend": "cd backend && uv run uvicorn app.main:app --reload --port 8000",
+    "lint": "pnpm -r --parallel lint",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "build": "pnpm -r build",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "stack:up": "docker compose up -d",
+    "stack:down": "docker compose down",
+    "stack:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

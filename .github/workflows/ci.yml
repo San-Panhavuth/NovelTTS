@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  frontend-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Lint frontend and worker
+        run: pnpm lint
+
+      - name: Typecheck frontend and worker
+        run: pnpm typecheck
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync backend deps
+        run: uv sync --frozen
+
+      - name: Ruff lint
+        run: uv run ruff check app tests
+
+      - name: Black format check
+        run: uv run black --check app tests
+
+      - name: Mypy typecheck
+        run: uv run mypy app

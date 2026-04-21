@@ -1,0 +1,10 @@
+node_modules
+.next
+dist
+build
+coverage
+backend/.venv
+backend/.pytest_cache
+backend/.mypy_cache
+worker/dist
+frontend/prisma/migrations
