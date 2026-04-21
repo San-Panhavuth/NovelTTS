@@ -8,9 +8,9 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 **Goal**: monorepo + local dev stack runs end to end with no errors.
 
 - ✅ Initialize monorepo: `frontend/` (latest Next.js), `backend/` (FastAPI), `worker/` (BullMQ)
-- ⬜ Provision Supabase project (DB + Auth) — local + cloud instances *(requires user cloud account setup)*
-- ⬜ Provision Upstash Redis (free tier) *(requires user cloud account setup)*
-- ⬜ Provision Cloudflare R2 bucket + CORS policy *(requires user cloud account setup)*
+- ✅ Provision Supabase project (DB + Auth) — local + cloud instances *(requires user cloud account setup)*
+- ✅ Provision Upstash Redis (free tier) *(requires user cloud account setup)*
+- ✅ Provision Cloudflare R2 bucket + CORS policy *(requires user cloud account setup)*
 - ✅ Initialize Prisma + SQLAlchemy schemas with shared model defs: Book, Chapter, Segment, Character, CharacterProfile, VoiceRequirement, Voice, AudioJob, PronunciationEntry
 - ✅ First DB migration
 - ✅ Configure ESLint + Prettier (frontend), Ruff + Black (backend)

@@ -4,6 +4,30 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-04-21 — Cloud provisioning completed, ready for Phase 1
+### Completed
+- Provisioned Supabase project and captured project URL, anon key, and service role key
+- Provisioned Upstash Redis and configured secure `rediss://` connection URL
+- Provisioned Cloudflare R2 bucket, generated access credentials, and configured bucket CORS for local frontend origin
+- Added Gemini API key for backend usage
+- Updated `docs/DEV_PLAN.md` to mark all remaining Phase 0 provisioning items as complete
+- Updated `README.md` progress language to reflect current status
+
+### Next
+- Begin Phase 1, Step 1: wire Supabase Auth in Next.js (email + Google OAuth)
+- Implement FastAPI JWT middleware to validate Supabase JWTs
+- Start EPUB upload + parsing pipeline and persist chapter records
+
+### Decisions Made
+- Treat Phase 0 as fully complete (local foundations + cloud provisioning)
+- Keep local development database on docker-compose Postgres for now; Supabase remains provisioned for auth and future DB cutover
+- Keep Redis configured via Upstash `rediss://` URL in backend and worker envs
+
+### Blockers
+- none
+
+---
+
 ## Session 2026-04-21 — Phase 0 implementation complete (local)
 ### Completed
 - Re-scaffolded `frontend/` with latest Next.js and normalized monorepo layout

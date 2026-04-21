@@ -2,7 +2,25 @@
 
 NovelTTS turns uploaded EPUB novels into multi-voice audiobooks.
 
-Status: Phase 0 foundation is complete locally. See `docs/DEV_PLAN.md` for progress.
+Status: Phase 0 is complete (foundations + cloud provisioning). Next focus is Phase 1 (Auth + EPUB upload flow). See `docs/DEV_PLAN.md` for detailed progress.
+
+Multi-voice audiobook generator from EPUB uploads. Upload an English-translated CN/KR/JP web novel, get back chapter MP3s where each character speaks in a distinct voice.
+
+## Repository Layout
+
+```text
+NovelTTS/
+├── frontend/        Next.js app (latest, Vercel)
+├── backend/         FastAPI + workers (Render)
+├── worker/          Node BullMQ orchestrator
+├── shared/          (future) cross-stack JSON schemas
+├── docs/            PRD, dev plan, session log, codebase doc
+├── plans/           Planner-agent output
+├── .claude/         Sub-agents + slash commands
+└── docker-compose.yml
+```
+
+See `docs/CODEBASE.md` for full architecture.
 
 ## How To Run (Windows + PowerShell)
 
@@ -17,6 +35,7 @@ This project has two run modes:
 - Python 3.11
 - uv (Python package manager)
 - Docker Desktop
+- FFmpeg (included in backend Docker image; install locally only if running backend outside Docker)
 
 Install quick commands:
 
@@ -143,10 +162,37 @@ docker compose up -d postgres redis
 
 ## Next Step For Phase 1
 
-You still need cloud credentials before Phase 1 features:
-- Supabase
-- Upstash Redis
-- Cloudflare R2
-- Gemini API key
+Phase 0 prerequisites are complete and environment values are configured.
 
-When ready, add those values to your env files and continue from `docs/DEV_PLAN.md`.
+Start implementing Phase 1 items in order:
+- Supabase Auth wiring in Next.js (email + Google OAuth)
+- FastAPI JWT middleware for Supabase token validation
+- EPUB upload + parsing flow and chapter persistence
+- Initial book/chapter REST endpoints and frontend library/upload/detail pages
+
+Track implementation checklist in `docs/DEV_PLAN.md`.
+
+## Cloud Services Reference
+
+Provisioning status: completed for current development setup.
+
+| Service | Used for | Env vars to set |
+|---|---|---|
+| Supabase | Postgres + Auth | `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Upstash Redis | BullMQ job queue | `REDIS_URL` |
+| Cloudflare R2 | Audio file storage | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ENDPOINT` |
+| Google AI Studio | Gemini 2.5 Flash | `GEMINI_API_KEY` |
+
+For local development, docker-compose Postgres + Redis covers local infra; cloud credentials are now provisioned for Supabase, Upstash, R2, and Gemini.
+
+## Working With Claude Code
+
+This repo has a structured workflow defined in `CLAUDE.md`:
+
+- `/start-session` — load context at session start
+- `/end-session` — log progress at session end
+- `/plan-feature <description>` — dispatch planner agent
+- `/review` — dispatch code-reviewer on uncommitted diff
+- `/new-phase <N>` — transition to next dev phase
+
+Sub-agents live in `.claude/agents/`. Hard rules and conventions are in `CLAUDE.md`.
