@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts"
     supabase_url: str = ""
     supabase_jwt_aud: str = "authenticated"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     model_config = SettingsConfigDict(
         # Prefer workspace root env files for a single-source local setup.

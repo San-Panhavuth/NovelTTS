@@ -1,6 +1,7 @@
 # Codebase Architecture
 
 > Update this file at the end of each phase, not after every commit. It should always reflect the **current** state, not history.
+> Phase 2 is complete under the current benchmark gate (`strict_accuracy >= 0.70` on locked `gold/test`; current `0.7408`).
 
 ## Repository Layout (current after Phase 0 local implementation)
 

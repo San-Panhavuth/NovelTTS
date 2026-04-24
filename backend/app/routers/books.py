@@ -8,14 +8,20 @@ from uuid import uuid4
 from ebooklib import ITEM_DOCUMENT, epub
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps.auth import AuthUser, get_current_user
 from app.deps.db import get_db_session
 from app.models.book import Book
 from app.models.chapter import Chapter
+from app.models.character import Character
+from app.models.enums import SegmentType
+from app.models.segment import Segment
 from app.models.user import User
+from app.providers.llm import get_llm_provider
+from app.services.attribution import AttributedSegment, attribute_chunk
+from app.services.text_chunker import chunk_text
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -24,6 +30,7 @@ EPUB_MIME_TYPES = {
     "application/epub+zip",
     "application/octet-stream",
 }
+LOW_CONFIDENCE_THRESHOLD = 0.65
 
 
 class ChapterResponse(BaseModel):
@@ -53,11 +60,58 @@ class BookDetailResponse(BaseModel):
     chapters: list[ChapterResponse]
 
 
+class ProcessChapterResponse(BaseModel):
+    chapter_id: str
+    chapter_idx: int
+    status: str
+    segment_count: int
+
+
+class SegmentResponse(BaseModel):
+    id: str
+    segment_idx: int
+    text: str
+    type: SegmentType
+    character_id: str | None
+    character_name: str | None
+    confidence: float | None
+    low_confidence: bool
+
+
+class CharacterSummaryResponse(BaseModel):
+    id: str
+    name: str
+    role: str | None
+
+
+class SegmentCorrectionRequest(BaseModel):
+    type: SegmentType
+    character_name: str | None = None
+
+
 def _normalize_text(raw_html: str) -> str:
     text = re.sub(r"<[^>]+>", " ", raw_html)
     text = unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _is_low_confidence(confidence: float | None) -> bool:
+    if confidence is None:
+        return True
+    return confidence < LOW_CONFIDENCE_THRESHOLD
+
+
+def _normalize_character_name(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    normalized = re.sub(r"\s+", " ", value).strip().strip('"').strip("'")
+    if not normalized:
+        return None
+
+    # DB column is VARCHAR(255).
+    return normalized[:255]
 
 
 async def _ensure_user_exists(session: AsyncSession, auth_user: AuthUser) -> None:
@@ -230,4 +284,215 @@ async def get_book_chapter(
         title=chapter.title,
         status=chapter.status,
         raw_text=chapter.raw_text,
+    )
+
+
+@router.post("/{book_id}/chapters/{index}/process", response_model=ProcessChapterResponse)
+async def process_book_chapter(
+    book_id: str,
+    index: int,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ProcessChapterResponse:
+    try:
+        book = await session.get(Book, book_id)
+        if not book or book.user_id != auth_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+        chapter_stmt = (
+            select(Chapter)
+            .where(Chapter.book_id == book.id, Chapter.chapter_idx == index)
+            .with_for_update()
+        )
+        chapter = (await session.execute(chapter_stmt)).scalar_one_or_none()
+        if chapter is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+
+        chapter_chunks = chunk_text(chapter.raw_text)
+        if not chapter_chunks:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chapter has no processable text")
+
+        llm_provider = get_llm_provider()
+
+        existing_characters_stmt = select(Character).where(Character.book_id == book.id)
+        existing_characters = (await session.execute(existing_characters_stmt)).scalars().all()
+        characters_by_name: dict[str, Character] = {
+            character.name.lower(): character for character in existing_characters
+        }
+
+        await session.execute(delete(Segment).where(Segment.chapter_id == chapter.id))
+        await session.flush()
+
+        created_segments: list[Segment] = []
+        segment_idx = 0
+        for chunk in chapter_chunks:
+            attributed_segments: list[AttributedSegment] = await attribute_chunk(chunk, llm_provider)
+            for attributed in attributed_segments:
+                character_id: str | None = None
+                character_name = _normalize_character_name(attributed.character)
+                if character_name:
+                    key = character_name.lower()
+                    character = characters_by_name.get(key)
+                    if character is None:
+                        character = Character(
+                            id=str(uuid4()),
+                            book_id=book.id,
+                            name=character_name,
+                            role=None,
+                            voice_id=None,
+                        )
+                        session.add(character)
+                        characters_by_name[key] = character
+                    character_id = character.id
+
+                segment = Segment(
+                    id=str(uuid4()),
+                    chapter_id=chapter.id,
+                    segment_idx=segment_idx,
+                    text=attributed.text,
+                    type=attributed.type,
+                    character_id=character_id,
+                    confidence=attributed.confidence,
+                )
+                created_segments.append(segment)
+                session.add(segment)
+                segment_idx += 1
+
+        chapter.status = "processed"
+        await session.commit()
+
+        return ProcessChapterResponse(
+            chapter_id=chapter.id,
+            chapter_idx=chapter.chapter_idx,
+            status=chapter.status,
+            segment_count=len(created_segments),
+        )
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as exc:  # noqa: BLE001
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chapter processing failed: {exc}",
+        ) from exc
+
+
+@router.get("/{book_id}/chapters/{index}/segments", response_model=list[SegmentResponse])
+async def list_chapter_segments(
+    book_id: str,
+    index: int,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[SegmentResponse]:
+    book = await session.get(Book, book_id)
+    if not book or book.user_id != auth_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    chapter_stmt = select(Chapter).where(Chapter.book_id == book.id, Chapter.chapter_idx == index)
+    chapter = (await session.execute(chapter_stmt)).scalar_one_or_none()
+    if chapter is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+
+    segments_stmt = select(Segment).where(Segment.chapter_id == chapter.id).order_by(Segment.segment_idx.asc())
+    segments = (await session.execute(segments_stmt)).scalars().all()
+    characters_stmt = select(Character).where(Character.book_id == book.id)
+    characters = (await session.execute(characters_stmt)).scalars().all()
+    character_name_by_id = {character.id: character.name for character in characters}
+
+    return [
+        SegmentResponse(
+            id=segment.id,
+            segment_idx=segment.segment_idx,
+            text=segment.text,
+            type=segment.type,
+            character_id=segment.character_id,
+            character_name=character_name_by_id.get(segment.character_id) if segment.character_id else None,
+            confidence=segment.confidence,
+            low_confidence=_is_low_confidence(segment.confidence),
+        )
+        for segment in segments
+    ]
+
+
+@router.get("/{book_id}/characters", response_model=list[CharacterSummaryResponse])
+async def list_book_characters(
+    book_id: str,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[CharacterSummaryResponse]:
+    book = await session.get(Book, book_id)
+    if not book or book.user_id != auth_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    characters_stmt = select(Character).where(Character.book_id == book.id).order_by(Character.name.asc())
+    characters = (await session.execute(characters_stmt)).scalars().all()
+
+    return [
+        CharacterSummaryResponse(id=character.id, name=character.name, role=character.role)
+        for character in characters
+    ]
+
+
+@router.patch("/{book_id}/chapters/{index}/segments/{segment_id}", response_model=SegmentResponse)
+async def update_chapter_segment(
+    book_id: str,
+    index: int,
+    segment_id: str,
+    payload: SegmentCorrectionRequest,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> SegmentResponse:
+    book = await session.get(Book, book_id)
+    if not book or book.user_id != auth_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    chapter_stmt = select(Chapter).where(Chapter.book_id == book.id, Chapter.chapter_idx == index)
+    chapter = (await session.execute(chapter_stmt)).scalar_one_or_none()
+    if chapter is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+
+    segment_stmt = select(Segment).where(Segment.id == segment_id, Segment.chapter_id == chapter.id)
+    segment = (await session.execute(segment_stmt)).scalar_one_or_none()
+    if segment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Segment not found")
+
+    character_name = _normalize_character_name(payload.character_name)
+    character_id: str | None = None
+    resolved_character_name: str | None = None
+
+    if character_name:
+        existing_character_stmt = select(Character).where(Character.book_id == book.id)
+        existing_characters = (await session.execute(existing_character_stmt)).scalars().all()
+        by_name = {character.name.lower(): character for character in existing_characters}
+
+        character = by_name.get(character_name.lower())
+        if character is None:
+            character = Character(
+                id=str(uuid4()),
+                book_id=book.id,
+                name=character_name,
+                role=None,
+                voice_id=None,
+            )
+            session.add(character)
+        character_id = character.id
+        resolved_character_name = character.name
+
+    segment.type = payload.type
+    segment.character_id = character_id
+    # Manual correction is treated as high confidence.
+    segment.confidence = 1.0
+
+    await session.commit()
+
+    return SegmentResponse(
+        id=segment.id,
+        segment_idx=segment.segment_idx,
+        text=segment.text,
+        type=segment.type,
+        character_id=segment.character_id,
+        character_name=resolved_character_name,
+        confidence=segment.confidence,
+        low_confidence=_is_low_confidence(segment.confidence),
     )

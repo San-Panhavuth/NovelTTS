@@ -27,7 +27,14 @@ class Segment(Base, TimestampMixin):
     )
     segment_idx: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
-    type: Mapped[SegmentType] = mapped_column(Enum(SegmentType), default=SegmentType.NARRATION)
+    type: Mapped[SegmentType] = mapped_column(
+        Enum(
+            SegmentType,
+            name="segmenttype",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=SegmentType.NARRATION,
+    )
     character_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("characters.id", ondelete="SET NULL"), nullable=True
     )

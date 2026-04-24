@@ -1,0 +1,63 @@
+[
+  {
+    "id": "sample-dialogue-and-narration-001",
+    "genre": "action",
+    "text": "He stepped back from the door. \"Run now!\" Mina shouted.",
+    "expected": [
+      {
+        "text": "He stepped back from the door.",
+        "type": "narration",
+        "character": null
+      },
+      {
+        "text": "\"Run now!\"",
+        "type": "dialogue",
+        "character": "Mina"
+      },
+      {
+        "text": "Mina shouted.",
+        "type": "narration",
+        "character": null
+      }
+    ]
+  },
+  {
+    "id": "sample-thought-quote-002",
+    "genre": "other",
+    "text": "It's the department that's no different to a suicide squad. They rush in at the slightest excuse to 'explore paranormal phenomena' and get chewed up.",
+    "expected": [
+      {
+        "text": "It's the department that's no different to a suicide squad.",
+        "type": "narration",
+        "character": null
+      },
+      {
+        "text": "They rush in at the slightest excuse to",
+        "type": "narration",
+        "character": null
+      },
+      {
+        "text": "'explore paranormal phenomena'",
+        "type": "thought",
+        "character": null
+      },
+      {
+        "text": "and get chewed up.",
+        "type": "narration",
+        "character": null
+      }
+    ]
+  },
+  {
+    "id": "sample-dialogue-long-003",
+    "genre": "romance",
+    "text": "\"Wow! An employee ID from the Field Exploration Team! I'm really looking forward to seeing what kind of adventures Employee Kim Soleum will have in the <Dark Exploration Records> universe!\"",
+    "expected": [
+      {
+        "text": "\"Wow! An employee ID from the Field Exploration Team! I'm really looking forward to seeing what kind of adventures Employee Kim Soleum will have in the <Dark Exploration Records> universe!\"",
+        "type": "dialogue",
+        "character": null
+      }
+    ]
+  }
+]

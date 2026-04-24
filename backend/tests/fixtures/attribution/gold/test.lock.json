@@ -1,0 +1,11 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "action_chapter_007.json": "848a4e302268fa7bcf52e02f8fe9fa4c8e8a1e433c87fc28e0ce7d61c553dba6",
+    "action_chapter_008.json": "3620cc1fe3541d0f580f7483ed7b0aee6d91ec6251599c9c5e550e10d6ae6aee",
+    "cultivation_chapter_002.json": "c80ab4c6129615c09b1facbf31f99b0647aa7cd6cc90ce3676d6b56f745b94dc",
+    "romance_chapter_003.json": "434ef4b686737621c18ff655ccf19baf9d41d763d0b24c1f9ec11491c41d4e57",
+    "romance_chapter_011.json": "f1a224921c413a9a84ef3fe9b7eebdfdd764e36e546d71cd07233d67910e76ab"
+  },
+  "fixtures_dir": "C:\\Users\\Vuth\\Desktop\\NovelTTS\\backend\\tests\\fixtures\\attribution\\gold\\test"
+}

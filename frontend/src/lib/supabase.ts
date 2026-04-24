@@ -47,7 +47,12 @@ export async function createSupabaseServerClient() {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
+          try {
+            cookieStore.set(name, value, options);
+          } catch {
+            // In Server Components, cookie mutation is not allowed.
+            // Server Actions and Route Handlers can still persist updates.
+          }
         });
       },
     },
