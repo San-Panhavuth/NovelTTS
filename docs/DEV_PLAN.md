@@ -60,36 +60,38 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 
 ---
 
-## Phase 3 — Character Intelligence & Voice System
-**Goal**: AI profiles + recommended voices per character; user manages everything from one dashboard.
+## Phase 3 — 3-Role Voice Assignment (narration / dialogue / thought)
+**Goal**: user picks three voice roles per book; voices persist and feed Phase 4 TTS generation.
 
-### Character Profile Pipeline (LLM-only — no wiki)
-- ⬜ Pipeline: collect first 5 chapters per character + every dialogue line they speak → Gemini → `CharacterProfile`
-- ⬜ Store `CharacterProfile` (age, gender, personality[], speechStyle[], role, voiceNotes, confidence)
-- ⬜ LLM prompt: `CharacterProfile` → `VoiceRequirement` (pitch, age_group, tone, pacing, energy, avoid[], rationale)
-- ⬜ Store `VoiceRequirement` per character
+> **Why simplified**: Phase 2 attribution tags each segment as `narration | dialogue | thought` reliably,
+> but cannot identify *which* character is speaking a given line across arbitrary translated novels.
+> Per-character voicing is deferred to post-MVP (see Phase 9).
 
-### Voice Library & Scoring
-- ⬜ Build Edge TTS voice catalog ingestion script (auto-tag pitch / age / gender / locale from voice metadata)
-- ⬜ Manually tag all ~10 Kokoro voices: pitch, ageGroup, tone, gender, energy
-- ⬜ Generate preview audio samples for every voice → upload to R2
-- ⬜ Voice scoring function: hard-reject voices in `avoid` list, score positive matches, return top 3
-- ⬜ Voice conflict detector: flag if two main characters share a voice
+### Voice Catalog
+- ✅ Build Edge TTS voice catalog ingestion script (`scripts/ingest_edge_tts_voices.py`)
+- ✅ Manually tag all ~10 Kokoro voices (`scripts/seed_kokoro_voices.py`)
+- ✅ Preview generation script (`scripts/generate_voice_previews.py` — run when TTS is ready)
+
+### Data Model & API
+- ✅ `voice_assignments` table: per-user default + per-book override rows, with `narration_voice_id`, `dialogue_voice_id`, `thought_pitch_semitones`
+- ✅ Migration `0002`: drop `character_profiles` + `voice_requirements`, add `voice_assignments`
+- ✅ `resolve_voice_assignment(user_id, book_id)` → effective triplet (merges default + override)
+- ✅ REST endpoints:
+  - `GET /voices` — list available voices
+  - `GET /voice-settings/defaults` + `PUT /voice-settings/defaults` — user global defaults
+  - `GET /books/{id}/voice-settings` + `PUT /books/{id}/voice-settings` — per-book override
 
 ### Pronunciation Dictionary
 - ⬜ LLM infers phonetics for character names (Korean / Chinese), cultivation terms, place names
 - ⬜ Store `PronunciationEntry` per book
 - ⬜ SSML `<phoneme>` injector before TTS call
 
-### Dashboard
-- ⬜ Per-novel `/dashboard/[bookId]/voices` page
-- ⬜ Character cards: name, role, age badge, personality summary, "avoid" chips
-- ⬜ Top 3 recommended voices with one-click preview
-- ⬜ "Change Voice" full browser, disqualified voices greyed out + tooltip
-- ⬜ "Re-research" button to re-run profile extraction
-- ⬜ Manual override: edit AI personality notes
+### Frontend
+- ✅ `/settings/voices` — user global defaults picker (narration voice, dialogue voice, thought pitch slider)
+- ✅ `/books/[id]/voice-settings` — per-book override with same three controls; empty = inherits default
+- ✅ Voice preview button (`VoicePicker` client component — plays `sample_url` when available)
 
-**Done when**: dashboard shows all characters with profiles + recommended voices + working assignment.
+**Done when**: user can pick narration + dialogue voice + thought pitch offset for any book, values persist, and `resolve_voice_assignment` returns the correct effective assignment for any `(user, book)` pair.
 
 ---
 
@@ -143,3 +145,15 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 - ⏭ Sentry error monitoring
 - ⏭ Better Uptime / UptimeRobot
 - ⏭ Custom domain + SSL
+
+---
+
+## Phase 9 — Per-Character Voice Casting (post-MVP, deferred)
+> Deferred because dialog attribution cannot reliably identify the speaker across arbitrary
+> translated web novels. Revisit once Phase 2 `strict_accuracy` on `gold/test` exceeds ~0.90.
+
+- ⏭ LLM character profile pipeline: collect chapter context + dialogue lines → `CharacterProfile`
+- ⏭ LLM voice requirement mapping: `CharacterProfile` → `VoiceRequirement`
+- ⏭ Voice scoring: hard-reject `avoid` list, score metadata matches, return top 3 per character
+- ⏭ Voice conflict detector: flag if two main characters share a voice
+- ⏭ Character voice dashboard: cards with profile summary, recommended voices, assignment controls

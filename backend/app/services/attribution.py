@@ -265,7 +265,17 @@ def _heuristic_split(source_text: str) -> list[AttributedSegment]:
     )
 
 
-def _build_prompt(text: str) -> str:
+def _build_prompt(
+    text: str,
+    known_characters: list[str] | None = None,
+    last_speaker: str | None = None,
+) -> str:
+    character_context = f"Known characters in this book: {known_characters}. " if known_characters else ""
+    last_speaker_context = (
+        f"Most recent confirmed dialogue speaker before this text: {last_speaker}. "
+        if last_speaker
+        else ""
+    )
     return (
         "You are an assistant for novel line attribution. "
         "Return JSON only, no markdown. "
@@ -283,6 +293,7 @@ def _build_prompt(text: str) -> str:
         "If quoted speech is followed by a speaker tag like 'Mina shouted.' or 'Mina said.', attach the speaker name "
         "to the dialogue item in the character field and keep the tag itself as narration only if it is separate. "
         "Prefer maximal contiguous spans with the same meaning; do not fragment quotes at sentence punctuation.\n\n"
+        f"{character_context}{last_speaker_context}"
         f"Input:\n{text}"
     )
 
@@ -323,6 +334,44 @@ def _normalize_confidence(raw_confidence: object) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, value))
+
+
+def _build_known_character_alias_map(known_characters: list[str] | None) -> dict[str, str]:
+    if not known_characters:
+        return {}
+
+    alias_to_full: dict[str, str] = {}
+    collisions: set[str] = set()
+    for full_name in known_characters:
+        normalized_full = re.sub(r"\s+", " ", full_name).strip()
+        if not normalized_full:
+            continue
+        aliases = {normalized_full.lower()}
+        for token in normalized_full.split(" "):
+            if len(token) >= 2:
+                aliases.add(token.lower())
+        for alias in aliases:
+            existing = alias_to_full.get(alias)
+            if existing and existing != normalized_full:
+                collisions.add(alias)
+            else:
+                alias_to_full[alias] = normalized_full
+
+    for alias in collisions:
+        alias_to_full.pop(alias, None)
+    return alias_to_full
+
+
+def _resolve_character_to_known(
+    raw_character: str | None,
+    alias_map: dict[str, str],
+) -> str | None:
+    if not raw_character:
+        return None
+    compact = re.sub(r"\s+", " ", raw_character).strip()
+    if not compact:
+        return None
+    return alias_map.get(compact.lower(), compact)
 
 
 def _merge_adjacent_same_label(segments: list[AttributedSegment]) -> list[AttributedSegment]:
@@ -789,11 +838,16 @@ def _repair_source_coverage(
     return repaired or _heuristic_split(source_text)
 
 
-def _from_payload(payload: dict, source_text: str) -> list[AttributedSegment]:
+def _from_payload(
+    payload: dict,
+    source_text: str,
+    known_characters: list[str] | None = None,
+) -> list[AttributedSegment]:
     raw_items = payload.get("items")
     if not isinstance(raw_items, list) or not raw_items:
         return _heuristic_split(source_text)
 
+    alias_map = _build_known_character_alias_map(known_characters)
     output: list[AttributedSegment] = []
     for item in raw_items:
         if not isinstance(item, dict):
@@ -807,6 +861,7 @@ def _from_payload(payload: dict, source_text: str) -> list[AttributedSegment]:
         character = str(raw_character).strip() if isinstance(raw_character, str) else None
         if character == "":
             character = None
+        character = _resolve_character_to_known(character, alias_map)
 
         output.append(
             AttributedSegment(
@@ -872,12 +927,18 @@ async def _attribute_with_presegmented_labels(
     text: str,
     provider: LLMProvider,
     mode: str,
+    known_characters: list[str] | None,
+    last_speaker: str | None,
 ) -> list[AttributedSegment]:
     base_segments = _heuristic_split(text)
     if not base_segments:
         return []
 
     prompt = _build_label_prompt(text, base_segments, mode=mode)
+    if known_characters:
+        prompt += f"\nKnown characters in this book: {known_characters}"
+    if last_speaker:
+        prompt += f"\nMost recent confirmed dialogue speaker before this text: {last_speaker}"
     try:
         payload = await provider.complete_json(prompt)
     except Exception:  # noqa: BLE001
@@ -886,6 +947,7 @@ async def _attribute_with_presegmented_labels(
     labels, has_explicit_idx = _extract_item_labels(payload)
     if not has_explicit_idx:
         return []
+    alias_map = _build_known_character_alias_map(known_characters)
     labeled: list[AttributedSegment] = []
     for idx, segment in enumerate(base_segments):
         label = labels.get(idx)
@@ -896,7 +958,7 @@ async def _attribute_with_presegmented_labels(
             AttributedSegment(
                 text=segment.text,
                 type=label.type,
-                character=label.character,
+                character=_resolve_character_to_known(label.character, alias_map),
                 confidence=label.confidence,
             )
         )
@@ -908,21 +970,88 @@ def _get_attribution_experiment_mode() -> str:
     return os.getenv("ATTRIBUTION_EXPERIMENT", "hybrid_v1").strip().lower()
 
 
-async def attribute_chunk(text: str, provider: LLMProvider) -> list[AttributedSegment]:
+def _carry_forward_short_dialogue_speakers(
+    segments: list[AttributedSegment],
+    last_speaker: str | None = None,
+) -> list[AttributedSegment]:
+    if not segments:
+        return []
+
+    finalized = list(segments)
+    for index, segment in enumerate(finalized):
+        if segment.type != SegmentType.DIALOGUE or segment.character:
+            continue
+        if _word_count(segment.text) > 8:
+            continue
+
+        chosen: str | None = None
+        for candidate_idx in range(index - 1, -1, -1):
+            candidate = finalized[candidate_idx]
+            if candidate.type == SegmentType.DIALOGUE and candidate.character:
+                chosen = candidate.character
+                break
+        if chosen is None:
+            for candidate in finalized[index + 1 :]:
+                if candidate.type == SegmentType.DIALOGUE and candidate.character:
+                    chosen = candidate.character
+                    break
+        if chosen is None and last_speaker:
+            chosen = last_speaker
+        if chosen is None:
+            continue
+
+        finalized[index] = AttributedSegment(
+            text=segment.text,
+            type=segment.type,
+            character=chosen,
+            confidence=segment.confidence,
+        )
+
+    return finalized
+
+
+async def attribute_chunk(
+    text: str,
+    provider: LLMProvider,
+    known_characters: list[str] | None = None,
+    last_speaker: str | None = None,
+) -> list[AttributedSegment]:
     mode = _get_attribution_experiment_mode()
 
     if mode in {"preseg_label_v1", "preseg_label_v2", "hybrid_v1"}:
         preseg_mode = "preseg_label_v2" if mode == "preseg_label_v2" else "preseg_label_v1"
-        primary = await _attribute_with_presegmented_labels(text, provider, mode=preseg_mode)
+        primary = await _attribute_with_presegmented_labels(
+            text,
+            provider,
+            mode=preseg_mode,
+            known_characters=known_characters,
+            last_speaker=last_speaker,
+        )
         if primary:
-            return _finalize_segments(primary)
+            return _carry_forward_short_dialogue_speakers(
+                _finalize_segments(primary),
+                last_speaker=last_speaker,
+            )
         if mode in {"preseg_label_v1", "preseg_label_v2"}:
             return _finalize_segments(_heuristic_split(text))
 
     # Legacy fallback path kept as safety net.
-    prompt = _build_prompt(text)
+    prompt = _build_prompt(
+        text,
+        known_characters=known_characters,
+        last_speaker=last_speaker,
+    )
     try:
         payload = await provider.complete_json(prompt)
     except Exception:  # noqa: BLE001
         payload = {}
-    return _finalize_segments(_from_payload(payload, source_text=text))
+    return _carry_forward_short_dialogue_speakers(
+        _finalize_segments(
+            _from_payload(
+                payload,
+                source_text=text,
+                known_characters=known_characters,
+            )
+        ),
+        last_speaker=last_speaker,
+    )

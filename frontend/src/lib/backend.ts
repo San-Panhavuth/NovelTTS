@@ -153,6 +153,42 @@ export async function apiPatchWithAuth<T>(path: string, body: unknown): Promise<
   return (await response.json()) as T;
 }
 
+export async function apiPutWithAuth<T>(path: string, body: unknown): Promise<T> {
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error("Missing access token");
+  }
+
+  let response: Response | null = null;
+  for (const baseUrl of candidateBaseUrls()) {
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      break;
+    } catch {
+      response = null;
+    }
+  }
+
+  if (!response) {
+    throw new Error(`Backend is unreachable. Make sure the FastAPI service is running on ${API_BASE_URL}.`);
+  }
+
+  if (!response.ok) {
+    throw await buildApiError("API request failed", response);
+  }
+
+  return (await response.json()) as T;
+}
+
 export async function apiUploadWithAuth<T>(path: string, formData: FormData): Promise<T> {
   const token = await getAccessToken();
   if (!token) {

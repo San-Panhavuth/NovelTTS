@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { apiPatchWithAuth, apiPostWithAuth } from "@/lib/backend";
+import { apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from "@/lib/backend";
 
 type ProcessChapterResult = {
   chapter_id: string;
@@ -69,4 +69,113 @@ export async function updateSegmentCorrection(formData: FormData) {
   }
 
   redirect(`/books/${bookId}/chapters/${chapterIndex}?message=${encodeURIComponent(successMessage)}`);
+}
+
+export type VoiceItem = {
+  id: string;
+  provider: string;
+  provider_id: string;
+  name: string;
+  gender: string | null;
+  locale: string | null;
+  pitch: string | null;
+  age_group: string | null;
+  tone: string | null;
+  energy: string | null;
+  sample_url: string | null;
+};
+
+export type VoiceAssignmentData = {
+  scope: string;
+  narration_voice_id: string | null;
+  dialogue_voice_id: string | null;
+  thought_pitch_semitones: number;
+};
+
+export type ResolvedAssignmentData = {
+  narration_voice_id: string | null;
+  dialogue_voice_id: string | null;
+  thought_pitch_semitones: number;
+};
+
+export async function listVoices(): Promise<VoiceItem[]> {
+  return apiGetWithAuth<VoiceItem[]>("/voices");
+}
+
+export async function getUserVoiceDefaults(): Promise<VoiceAssignmentData> {
+  return apiGetWithAuth<VoiceAssignmentData>("/voice-settings/defaults");
+}
+
+export async function updateUserVoiceDefaults(
+  narrationVoiceId: string | null,
+  dialogueVoiceId: string | null,
+  thoughtPitchSemitones: number
+): Promise<VoiceAssignmentData> {
+  return apiPutWithAuth<VoiceAssignmentData>("/voice-settings/defaults", {
+    narration_voice_id: narrationVoiceId,
+    dialogue_voice_id: dialogueVoiceId,
+    thought_pitch_semitones: thoughtPitchSemitones,
+  });
+}
+
+export async function getBookVoiceSettings(bookId: string): Promise<ResolvedAssignmentData> {
+  return apiGetWithAuth<ResolvedAssignmentData>(`/books/${bookId}/voice-settings`);
+}
+
+export async function updateBookVoiceSettings(
+  bookId: string,
+  narrationVoiceId: string | null,
+  dialogueVoiceId: string | null,
+  thoughtPitchSemitones: number
+): Promise<VoiceAssignmentData> {
+  return apiPutWithAuth<VoiceAssignmentData>(`/books/${bookId}/voice-settings`, {
+    narration_voice_id: narrationVoiceId,
+    dialogue_voice_id: dialogueVoiceId,
+    thought_pitch_semitones: thoughtPitchSemitones,
+  });
+}
+
+// Server action wrappers for form submissions
+export async function saveUserVoiceDefaults(formData: FormData) {
+  const narrationVoiceId = formData.get("narrationVoiceId");
+  const dialogueVoiceId = formData.get("dialogueVoiceId");
+  const thoughtPitch = formData.get("thoughtPitchSemitones");
+
+  try {
+    await updateUserVoiceDefaults(
+      typeof narrationVoiceId === "string" && narrationVoiceId ? narrationVoiceId : null,
+      typeof dialogueVoiceId === "string" && dialogueVoiceId ? dialogueVoiceId : null,
+      typeof thoughtPitch === "string" ? parseFloat(thoughtPitch) : -2.0
+    );
+    revalidatePath("/settings/voices");
+    redirect("/settings/voices?message=Defaults+saved.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Save failed.";
+    redirect(`/settings/voices?message=${encodeURIComponent(message)}`);
+  }
+}
+
+export async function saveBookVoiceSettings(formData: FormData) {
+  const bookId = formData.get("bookId");
+  const narrationVoiceId = formData.get("narrationVoiceId");
+  const dialogueVoiceId = formData.get("dialogueVoiceId");
+  const thoughtPitch = formData.get("thoughtPitchSemitones");
+
+  if (typeof bookId !== "string") {
+    redirect("/library?message=Invalid+book+id.");
+  }
+
+  try {
+    await updateBookVoiceSettings(
+      bookId,
+      typeof narrationVoiceId === "string" && narrationVoiceId ? narrationVoiceId : null,
+      typeof dialogueVoiceId === "string" && dialogueVoiceId ? dialogueVoiceId : null,
+      typeof thoughtPitch === "string" ? parseFloat(thoughtPitch) : -2.0
+    );
+    revalidatePath(`/books/${bookId}/voice-settings`);
+    redirect(`/books/${bookId}/voice-settings?message=Saved.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Save failed.";
+    redirect(`/books/${bookId}/voice-settings?message=${encodeURIComponent(message)}`);
+  }
 }

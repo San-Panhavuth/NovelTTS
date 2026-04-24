@@ -54,6 +54,16 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
         </section>
 
         <section className="space-y-3">
+          <Link
+            href={`/books/${book.id}/voice-settings`}
+            className="block rounded-lg border p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          >
+            <h2 className="text-lg font-medium">Voice Settings</h2>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Choose narration, dialogue, and thought voices for this book.
+            </p>
+          </Link>
+
           {book.chapters.map((chapter) => (
             <Link
               key={chapter.id}

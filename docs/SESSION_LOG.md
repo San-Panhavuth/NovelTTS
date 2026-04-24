@@ -4,6 +4,85 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-04-24 — Dropped per-character AI; introduced 3-role voice system
+
+### Completed
+- **Removed** per-character LLM pipeline entirely:
+  - Deleted `backend/app/services/character_intelligence.py`
+  - Deleted `backend/app/routers/voices.py`
+  - Deleted `backend/app/models/character_profile.py`, `voice_requirement.py`
+  - Deleted `backend/tests/test_character_intelligence.py`
+  - Removed `profile` + `voice_requirement` relationships and `voice_id` column from `Character` model
+- **Added** 3-role voice assignment system:
+  - New model `backend/app/models/voice_assignment.py` (`voice_assignments` table: user default + per-book override)
+  - New service `backend/app/services/voice_resolution.py` — `resolve_voice_assignment(user_id, book_id)` merges default + override
+  - New router `backend/app/routers/voice_settings.py` — `GET/PUT /voice-settings/defaults`, `GET/PUT /books/{id}/voice-settings`, `GET /voices`
+  - Migration `0002_drop_char_ai_add_voice_assignments.py` — drops old tables, adds `voice_assignments`
+  - Frontend: `/settings/voices` (global defaults), `/books/[id]/voice-settings` (per-book override)
+  - Updated `frontend/src/lib/backend.ts` with `apiPutWithAuth`
+  - Updated `frontend/src/app/books/actions.ts` — removed old research actions, added voice-settings actions
+  - Updated book detail page nav link to point to new voice-settings page
+- **Updated** `docs/DEV_PLAN.md` — Phase 3 rewritten as 3-role voice system; old per-character work moved to Phase 9 (deferred)
+
+### Rationale
+Phase 2 attribution reliably tags `narration | dialogue | thought` but cannot reliably identify *which character* is speaking, so per-character voicing produced wrong-voice errors. Simplified to 3 global role slots.
+
+### Validation
+- `ruff check` passes on all new/modified backend files
+- `pytest tests/test_attribution.py tests/test_voice_resolution.py` — 17 passed
+
+### Next
+- Run `alembic upgrade head` against local DB to apply migration 0002
+- Build Edge TTS voice catalog ingestion + Kokoro manual tagging (remaining Phase 3 tasks)
+- Generate preview samples → upload to R2
+- Add voice preview button to voice-settings pages
+
+### Decisions Made
+- Dialogue and thought share one voice; thought is rendered at `thought_pitch_semitones` offset (default −2 st)
+- Assignment scoped per-user default + per-book override; resolver merges them
+
+### Blockers
+- None
+
+---
+
+## Session 2026-04-24 — Phase 3 steps 1-4 implemented
+### Completed
+- **Step 1 done**: Added character profile research pipeline
+	- New backend service: `backend/app/services/character_intelligence.py`
+	- New endpoint: `POST /books/{book_id}/characters/research`
+	- Pipeline collects first chapters + known dialogue and stores `CharacterProfile`
+- **Step 2 done**: Added voice requirement generation pipeline
+	- New endpoint: `POST /books/{book_id}/voices/requirements/research`
+	- Generates/stores `VoiceRequirement` from profile context
+- **Step 3 done**: Added voice scoring + top-3 recommendation flow
+	- Scoring includes hard disqualifier for `avoid[]` and metadata match scoring
+	- New dashboard data endpoint: `GET /books/{book_id}/voices/dashboard`
+- **Step 4 done**: Added frontend voice dashboard UI
+	- New page: `frontend/src/app/books/[id]/voices/page.tsx`
+	- Added re-research actions in `frontend/src/app/books/actions.ts`
+	- Added navigation link from `frontend/src/app/books/[id]/page.tsx`
+
+### Validation
+- `ruff check backend/app/services/character_intelligence.py backend/app/routers/voices.py backend/app/main.py` passed
+- `pytest backend/tests/test_attribution.py backend/tests/test_attribution_benchmark_cli.py` passed
+- Frontend lint/typecheck command could not run because `bun` is unavailable in this environment
+
+### Next
+- Implement remaining Phase 3 tasks:
+	- voice catalog ingestion + Kokoro manual tagging
+	- preview sample generation
+	- full voice browser, conflict detection, and assignment controls
+
+### Decisions Made
+- Implemented dashboard under `/books/[id]/voices` while preserving planned `/dashboard/[bookId]/voices` intent
+- Kept scoring logic deterministic and provider-agnostic, with strict `avoid[]` disqualification
+
+### Blockers
+- `bun` executable missing in current shell environment (frontend lint/typecheck not executed via bun)
+
+---
+
 ## Session 2026-04-24 — Phase 2 benchmark target adjusted to 70% and marked done
 ### Completed
 - Updated `docs/DEV_PLAN.md` Phase 2 status from in-progress to done

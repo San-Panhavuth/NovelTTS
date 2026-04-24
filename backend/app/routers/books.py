@@ -319,14 +319,42 @@ async def process_book_chapter(
         characters_by_name: dict[str, Character] = {
             character.name.lower(): character for character in existing_characters
         }
+        characters_by_id: dict[str, Character] = {character.id: character for character in existing_characters}
 
         await session.execute(delete(Segment).where(Segment.chapter_id == chapter.id))
         await session.flush()
 
         created_segments: list[Segment] = []
         segment_idx = 0
+        known_character_names = [character.name for character in existing_characters]
+        last_known_speaker: str | None = None
+
+        # Seed speaker memory from previously processed chapters in this book.
+        previous_named_dialogue_stmt = (
+            select(Segment, Chapter)
+            .join(Chapter, Segment.chapter_id == Chapter.id)
+            .where(
+                Chapter.book_id == book.id,
+                Chapter.chapter_idx < chapter.chapter_idx,
+                Segment.type == SegmentType.DIALOGUE,
+                Segment.character_id.is_not(None),
+            )
+            .order_by(Chapter.chapter_idx.desc(), Segment.segment_idx.desc())
+            .limit(1)
+        )
+        previous_named_dialogue = (await session.execute(previous_named_dialogue_stmt)).first()
+        if previous_named_dialogue is not None:
+            previous_segment = previous_named_dialogue[0]
+            previous_character = characters_by_id.get(previous_segment.character_id or "")
+            if previous_character is not None:
+                last_known_speaker = previous_character.name
         for chunk in chapter_chunks:
-            attributed_segments: list[AttributedSegment] = await attribute_chunk(chunk, llm_provider)
+            attributed_segments: list[AttributedSegment] = await attribute_chunk(
+                chunk,
+                llm_provider,
+                known_characters=known_character_names,
+                last_speaker=last_known_speaker,
+            )
             for attributed in attributed_segments:
                 character_id: str | None = None
                 character_name = _normalize_character_name(attributed.character)
@@ -344,6 +372,11 @@ async def process_book_chapter(
                         session.add(character)
                         characters_by_name[key] = character
                     character_id = character.id
+                    if character.name not in known_character_names:
+                        known_character_names.append(character.name)
+                        characters_by_id[character.id] = character
+                    if attributed.type == SegmentType.DIALOGUE:
+                        last_known_speaker = character.name
 
                 segment = Segment(
                     id=str(uuid4()),

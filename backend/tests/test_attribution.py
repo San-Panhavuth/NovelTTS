@@ -196,3 +196,42 @@ async def test_adjacent_wrapped_quote_runs_are_split_before_alignment() -> None:
     assert result[0].type == SegmentType.DIALOGUE
     assert result[1].text == "“Yes…”"
     assert result[1].type == SegmentType.DIALOGUE
+
+
+@pytest.mark.asyncio
+async def test_attribute_chunk_injects_known_characters_and_last_speaker_in_prompt() -> None:
+    class _InspectingProvider:
+        def __init__(self) -> None:
+            self.last_prompt = ""
+
+        async def complete_json(self, prompt: str) -> dict:
+            self.last_prompt = prompt
+            return {}
+
+    provider = _InspectingProvider()
+    await attribute_chunk(
+        '"Who is there?"',
+        provider,
+        known_characters=["John Carter", "Mina"],
+        last_speaker="John Carter",
+    )
+
+    assert "Known characters in this book" in provider.last_prompt
+    assert "John Carter" in provider.last_prompt
+    assert "Most recent confirmed dialogue speaker before this text: John Carter" in provider.last_prompt
+
+
+@pytest.mark.asyncio
+async def test_short_dialogue_carries_forward_last_speaker() -> None:
+    provider = _FakeProvider(
+        {
+            "items": [
+                {"text": '"Wait."', "type": "dialogue", "character": None, "confidence": 0.7},
+            ]
+        }
+    )
+    result = await attribute_chunk('"Wait."', provider, last_speaker="Mina")
+
+    assert len(result) == 1
+    assert result[0].type == SegmentType.DIALOGUE
+    assert result[0].character == "Mina"

@@ -3,7 +3,19 @@
     "allow": [
       "Bash(pnpm --version)",
       "Bash(uv --version)",
-      "Bash(docker --version)"
+      "Bash(docker --version)",
+      "Bash(python -m ruff check app/models/voice_assignment.py app/services/voice_resolution.py app/routers/voice_settings.py app/main.py app/models/__init__.py app/models/character.py)",
+      "Bash(.venv/Scripts/ruff.exe check *)",
+      "Bash(.venv/Scripts/pytest.exe tests/test_attribution.py tests/test_voice_resolution.py -v)",
+      "Bash(.venv/Scripts/pytest.exe tests/test_attribution.py tests/test_voice_resolution.py -q)",
+      "Bash(.venv/Scripts/python.exe -c \"import edge_tts; print\\('edge-tts ok'\\)\")",
+      "Bash(.venv/Scripts/pip.exe install *)",
+      "Bash(uv sync *)",
+      "Bash(.venv/Scripts/python.exe -m alembic upgrade head)",
+      "Bash(docker-compose ps *)",
+      "Bash(DATABASE_URL=\"postgresql+psycopg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe -m alembic upgrade head)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/seed_kokoro_voices.py)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/ingest_edge_tts_voices.py --locale en)"
     ]
   }
 }

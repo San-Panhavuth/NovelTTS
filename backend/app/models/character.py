@@ -11,9 +11,7 @@ from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.book import Book
-    from app.models.character_profile import CharacterProfile
     from app.models.segment import Segment
-    from app.models.voice_requirement import VoiceRequirement
 
 
 class Character(Base, TimestampMixin):
@@ -25,13 +23,6 @@ class Character(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(String(255))
     role: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    voice_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
 
     book: Mapped[Book] = relationship(back_populates="characters")
     segments: Mapped[list[Segment]] = relationship(back_populates="character")
-    profile: Mapped[CharacterProfile | None] = relationship(
-        back_populates="character", uselist=False
-    )
-    voice_requirement: Mapped[VoiceRequirement | None] = relationship(
-        back_populates="character", uselist=False
-    )
