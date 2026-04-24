@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignOutForm } from "@/app/components/sign-out-form";
+import { PitchSlider } from "@/app/components/pitch-slider";
 import { VoicePicker } from "@/app/components/voice-picker";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import { getUserVoiceDefaults, listVoices, saveUserVoiceDefaults } from "@/app/books/actions";
@@ -8,6 +9,15 @@ import { getUserVoiceDefaults, listVoices, saveUserVoiceDefaults } from "@/app/b
 type VoiceDefaultsPageProps = {
   searchParams: Promise<{ message?: string }>;
 };
+
+function normalizeVoiceValue(raw: string | null, voices: { id: string; provider_id: string }[]): string {
+  if (!raw) return "";
+  const byProvider = voices.find((v) => v.provider_id === raw);
+  if (byProvider) return byProvider.provider_id;
+  const byId = voices.find((v) => v.id === raw);
+  if (byId) return byId.provider_id;
+  return "";
+}
 
 export default async function UserVoiceDefaultsPage({ searchParams }: VoiceDefaultsPageProps) {
   if (!isSupabaseConfigured()) {
@@ -60,7 +70,7 @@ export default async function UserVoiceDefaultsPage({ searchParams }: VoiceDefau
           label="Narration Voice"
           name="narrationVoiceId"
           voices={voices}
-          defaultValue={defaults.narration_voice_id ?? ""}
+          defaultValue={normalizeVoiceValue(defaults.narration_voice_id, voices)}
           placeholder="(none)"
         />
 
@@ -69,31 +79,11 @@ export default async function UserVoiceDefaultsPage({ searchParams }: VoiceDefau
           description="Also used for thought segments with the pitch offset applied below."
           name="dialogueVoiceId"
           voices={voices}
-          defaultValue={defaults.dialogue_voice_id ?? ""}
+          defaultValue={normalizeVoiceValue(defaults.dialogue_voice_id, voices)}
           placeholder="(none)"
         />
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="thoughtPitch" className="text-sm font-medium">
-            Thought Pitch Offset (semitones)
-          </label>
-          <p className="text-xs text-zinc-500">
-            Applied to the dialogue voice for inner-monologue segments. Default: −2 st.
-          </p>
-          <input
-            id="thoughtPitch"
-            type="range"
-            name="thoughtPitchSemitones"
-            min="-12"
-            max="0"
-            step="0.5"
-            defaultValue={defaults.thought_pitch_semitones}
-            className="w-full"
-          />
-          <span className="text-xs text-zinc-500">
-            Current: {defaults.thought_pitch_semitones} st
-          </span>
-        </div>
+        <PitchSlider defaultValue={defaults.thought_pitch_semitones} />
 
         <button
           type="submit"

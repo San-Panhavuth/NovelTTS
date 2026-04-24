@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +13,13 @@ from app.deps.db import get_db_session
 from app.models.book import Book
 from app.models.voice import Voice
 from app.models.voice_assignment import VoiceAssignment
+from app.providers.tts.edge import EdgeTTSProvider
 from app.services.voice_resolution import ResolvedAssignment, resolve_voice_assignment
 
 router = APIRouter(tags=["voice-settings"])
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
 
 
 # --- shared helpers ---
@@ -63,6 +68,28 @@ class ResolvedAssignmentResponse(BaseModel):
 
 # --- voice catalog ---
 
+
+async def _resolve_voice_uuid_from_input(
+    session: AsyncSession,
+    raw_voice: str | None,
+) -> str | None:
+    """Accept either voices.id (UUID) or voices.provider_id and return UUID."""
+    if not raw_voice:
+        return None
+
+    if UUID_RE.match(raw_voice):
+        by_id = await session.get(Voice, raw_voice)
+        if by_id is not None:
+            return by_id.id
+
+    by_provider = (
+        await session.execute(select(Voice).where(Voice.provider_id == raw_voice))
+    ).scalar_one_or_none()
+    if by_provider is not None:
+        return by_provider.id
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown voice id: {raw_voice}")
+
 @router.get("/voices", response_model=list[VoiceResponse])
 async def list_voices(
     auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
@@ -86,6 +113,62 @@ async def list_voices(
         )
         for v in voices
     ]
+
+
+@router.get("/voices/preview")
+async def preview_voice(
+    voice_id: str = Query(..., min_length=3),
+    auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> Response:
+    _ = auth_user
+    # Ensure requested provider voice id exists in catalog.
+    voice = (
+        await session.execute(select(Voice).where(Voice.provider_id == voice_id))
+    ).scalar_one_or_none()
+    if voice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voice not found")
+
+    provider = EdgeTTSProvider()
+    preview_text = (
+        "Hello. This is a preview of the selected voice for Novel TTS."
+    )
+    try:
+        audio = await provider.synthesize(preview_text, voice.provider_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to synthesize preview: {exc}",
+        ) from exc
+
+    return Response(content=audio, media_type="audio/mpeg")
+
+
+@router.get("/voices/preview/thought")
+async def preview_thought_voice(
+    voice_id: str = Query(..., min_length=3),
+    pitch_semitones: float = Query(default=-2.0, ge=-12.0, le=0.0),
+    auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> Response:
+    _ = auth_user
+    voice = (
+        await session.execute(select(Voice).where(Voice.provider_id == voice_id))
+    ).scalar_one_or_none()
+    if voice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voice not found")
+
+    provider = EdgeTTSProvider()
+    preview_text = "I can hear my own thoughts more clearly with this pitch."
+    try:
+        audio = await provider.synthesize_with_pitch(preview_text, voice.provider_id, pitch_semitones)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to synthesize thought preview: {exc}",
+        ) from exc
+
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 # --- user defaults ---
@@ -112,8 +195,8 @@ async def update_user_defaults(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> VoiceAssignmentResponse:
     row = await _get_or_create_user_default(session, auth_user.id)
-    row.narration_voice_id = body.narration_voice_id
-    row.dialogue_voice_id = body.dialogue_voice_id
+    row.narration_voice_id = await _resolve_voice_uuid_from_input(session, body.narration_voice_id)
+    row.dialogue_voice_id = await _resolve_voice_uuid_from_input(session, body.dialogue_voice_id)
     row.thought_pitch_semitones = body.thought_pitch_semitones
     await session.commit()
     return VoiceAssignmentResponse(
@@ -150,8 +233,8 @@ async def update_book_voice_settings(
 ) -> VoiceAssignmentResponse:
     await _load_owned_book(session, auth_user, book_id)
     row = await _get_or_create_book_override(session, auth_user.id, book_id)
-    row.narration_voice_id = body.narration_voice_id
-    row.dialogue_voice_id = body.dialogue_voice_id
+    row.narration_voice_id = await _resolve_voice_uuid_from_input(session, body.narration_voice_id)
+    row.dialogue_voice_id = await _resolve_voice_uuid_from_input(session, body.dialogue_voice_id)
     row.thought_pitch_semitones = body.thought_pitch_semitones
     await session.commit()
     return VoiceAssignmentResponse(

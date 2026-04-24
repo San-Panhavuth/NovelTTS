@@ -6,6 +6,7 @@ export type VoiceOption = {
   id: string;
   name: string;
   provider: string;
+  provider_id: string;
   locale: string | null;
   sample_url: string | null;
 };
@@ -30,23 +31,47 @@ export function VoicePicker({
   const [selected, setSelected] = useState(defaultValue);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
-  const currentVoice = voices.find((v) => v.id === selected);
+  const currentVoice = voices.find((v) => v.provider_id === selected);
   const sampleUrl = currentVoice?.sample_url ?? null;
 
-  function handlePreview() {
-    if (!sampleUrl) return;
+  async function handlePreview() {
+    if (!selected) return;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
       setPlaying(false);
     }
-    const audio = new Audio(sampleUrl);
-    audioRef.current = audio;
-    audio.onended = () => setPlaying(false);
-    audio.onerror = () => setPlaying(false);
-    audio.play();
-    setPlaying(true);
+    try {
+      setLoadingPreview(true);
+      let audioSrc = sampleUrl;
+      if (!audioSrc) {
+        const res = await fetch(`/api/voices/preview?voiceId=${encodeURIComponent(selected)}`);
+        if (!res.ok) {
+          setLoadingPreview(false);
+          return;
+        }
+        const blob = await res.blob();
+        audioSrc = URL.createObjectURL(blob);
+      }
+
+      const audio = new Audio(audioSrc);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setPlaying(false);
+        setLoadingPreview(false);
+      };
+      audio.onerror = () => {
+        setPlaying(false);
+        setLoadingPreview(false);
+      };
+      await audio.play();
+      setPlaying(true);
+    } catch {
+      setPlaying(false);
+      setLoadingPreview(false);
+    }
   }
 
   function handleStop() {
@@ -54,6 +79,7 @@ export function VoicePicker({
       audioRef.current.pause();
       audioRef.current = null;
       setPlaying(false);
+      setLoadingPreview(false);
     }
   }
 
@@ -76,21 +102,22 @@ export function VoicePicker({
         >
           <option value="">{placeholder}</option>
           {voices.map((v) => (
-            <option key={v.id} value={v.id}>
+            <option key={v.id} value={v.provider_id}>
               {v.name} — {v.provider}
               {v.locale ? ` (${v.locale})` : ""}
             </option>
           ))}
         </select>
 
-        {sampleUrl ? (
+        {selected ? (
           <button
             type="button"
             onClick={playing ? handleStop : handlePreview}
+            disabled={loadingPreview}
             className="shrink-0 rounded-md border px-3 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
             title={playing ? "Stop preview" : "Preview voice"}
           >
-            {playing ? "■ Stop" : "▶ Preview"}
+            {playing ? "■ Stop" : loadingPreview ? "Loading..." : "▶ Preview"}
           </button>
         ) : (
           <span className="shrink-0 px-3 py-2 text-xs text-zinc-400">No preview</span>

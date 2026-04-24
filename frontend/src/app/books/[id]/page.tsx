@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { SignOutForm } from "@/app/components/sign-out-form";
+import { PageShell } from "@/app/components/page-shell";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import { apiGetWithAuth } from "@/lib/backend";
 
@@ -23,18 +23,21 @@ type BookDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
+const statusBadge: Record<string, string> = {
+  uploaded: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  processing: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  processed: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  generating: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  done: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  failed: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+};
+
 export default async function BookDetailPage({ params }: BookDetailPageProps) {
-  if (!isSupabaseConfigured()) {
-    redirect("/login?message=Supabase env is not configured.");
-  }
+  if (!isSupabaseConfigured()) redirect("/login?message=Supabase env is not configured.");
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   const { id } = await params;
 
@@ -42,48 +45,46 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
     const book = await apiGetWithAuth<BookDetail>(`/books/${id}`);
 
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10">
-        <section className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{book.title}</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {book.author || "Unknown author"} · {book.origin_language || "Unknown language"}
-            </p>
-          </div>
-          <SignOutForm />
-        </section>
-
-        <section className="space-y-3">
+      <PageShell
+        title={book.title}
+        subtitle={[book.author, book.origin_language].filter(Boolean).join(" · ") || undefined}
+        maxWidth="xl"
+        breadcrumbs={[{ label: "Library", href: "/library" }, { label: book.title }]}
+        actions={
           <Link
             href={`/books/${book.id}/voice-settings`}
-            className="block rounded-lg border p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
-            <h2 className="text-lg font-medium">Voice Settings</h2>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Choose narration, dialogue, and thought voices for this book.
-            </p>
+            🎙 Voice Settings
           </Link>
-
+        }
+      >
+        <div className="space-y-2">
           {book.chapters.map((chapter) => (
             <Link
               key={chapter.id}
               href={`/books/${book.id}/chapters/${chapter.chapter_idx}`}
-              className="block rounded-lg border p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+              className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-5 py-4 hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
             >
-              <h2 className="text-lg font-medium">
-                Chapter {chapter.chapter_idx + 1}: {chapter.title || "Untitled"}
-              </h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">Status: {chapter.status}</p>
+              <div>
+                <span className="font-medium">
+                  Chapter {chapter.chapter_idx + 1}
+                </span>
+                {chapter.title && (
+                  <span className="ml-2 text-zinc-500">— {chapter.title}</span>
+                )}
+              </div>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
+                  statusBadge[chapter.status] ?? statusBadge.uploaded
+                }`}
+              >
+                {chapter.status}
+              </span>
             </Link>
           ))}
-        </section>
-
-        <div>
-          <button className="rounded-md border px-4 py-2 text-sm" disabled>
-            Process (Phase 2)
-          </button>
         </div>
-      </main>
+      </PageShell>
     );
   } catch {
     notFound();

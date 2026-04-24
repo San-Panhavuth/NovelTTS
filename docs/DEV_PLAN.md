@@ -98,19 +98,21 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 ## Phase 4 — TTS Audio Generation
 **Goal**: clicking "Generate" produces a playable MP3 per chapter.
 
-- ⬜ Set up BullMQ job queue (Redis) with TTS worker
-- ⬜ TTS worker: dequeue segment → call provider (Kokoro CUDA or Edge TTS) → save chunk to R2
-- ⬜ Audio stitcher: FFmpeg concatenates chunks → final chapter MP3
-- ⬜ Upload final MP3 to R2, store URL in DB
-- ⬜ REST endpoints:
-  - `POST /books/{id}/chapters/{index}/generate`
-  - `GET /jobs/{jobId}/status`
-- ⬜ WebSocket endpoint for real-time progress
+- ✅ Edge TTS provider (`app/providers/tts/edge.py`) with pitch offset support
+- ✅ R2 storage provider (`app/providers/storage/r2.py`) with local fallback
+- ✅ Generation service (`app/services/audio_generation.py`): segments → TTS → FFmpeg stitch → R2
+- ✅ REST endpoints:
+  - `POST /books/{id}/chapters/{index}/generate` → queues background job, returns `job_id`
+  - `GET /jobs/{jobId}` → status + progress + output_url
+  - `GET /books/{id}/chapters/{index}/latest-job` → most recent job for chapter
+- ✅ Next.js API proxy routes (`/api/generate/[bookId]/[chapterIdx]`, `/api/jobs/[jobId]`)
+- ✅ Frontend: `AudioPlayer` client component — Generate button, progress bar, `<audio>` player
 - ⬜ Audio caching: skip regeneration when `(voice_id, text_hash)` matches
 - ⬜ Retry logic: max 3 retries per failed segment
-- ⬜ Frontend: "Generate Audio" button + progress bar + plain `<audio>` player
+- ⬜ Kokoro provider (requires CUDA — Phase 4.5 when GPU available)
+- ⬜ BullMQ worker (upgrade from FastAPI BackgroundTasks when scale requires it)
 
-**Done when**: clicking Generate produces a playable MP3.
+**Done when**: clicking Generate produces a playable MP3. *(Edge TTS path is fully wired — test requires FFmpeg installed locally)*
 
 ---
 

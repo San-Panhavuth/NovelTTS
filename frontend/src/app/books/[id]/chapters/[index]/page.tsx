@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { PageShell } from "@/app/components/page-shell";
+import { AudioPlayer } from "@/app/components/audio-player";
 import { processChapter, updateSegmentCorrection } from "@/app/books/actions";
-import { SignOutForm } from "@/app/components/sign-out-form";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import { apiGetWithAuth } from "@/lib/backend";
 
@@ -24,121 +24,180 @@ type Segment = {
   low_confidence: boolean;
 };
 
+type JobStatus = {
+  job_id: string;
+  status: string;
+  progress: number;
+  error: string | null;
+  output_url: string | null;
+};
+
 type ChapterPageProps = {
   params: Promise<{ id: string; index: string }>;
   searchParams: Promise<{ message?: string }>;
 };
 
+const typeStyles: Record<string, { pill: string; border: string }> = {
+  narration: {
+    pill: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    border: "border-l-blue-400",
+  },
+  dialogue: {
+    pill: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    border: "border-l-amber-400",
+  },
+  thought: {
+    pill: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    border: "border-l-violet-400",
+  },
+};
+
 export default async function ChapterPage({ params, searchParams }: ChapterPageProps) {
-  if (!isSupabaseConfigured()) {
-    redirect("/login?message=Supabase env is not configured.");
-  }
+  if (!isSupabaseConfigured()) redirect("/login?message=Supabase env is not configured.");
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   const { id, index } = await params;
   const { message } = await searchParams;
 
   try {
-    const chapter = await apiGetWithAuth<ChapterDetail>(`/books/${id}/chapters/${index}`);
-    let segments: Segment[] = [];
-    try {
-      segments = await apiGetWithAuth<Segment[]>(`/books/${id}/chapters/${index}/segments`);
-    } catch {
-      segments = [];
-    }
+    const [chapter, segments, latestJob] = await Promise.all([
+      apiGetWithAuth<ChapterDetail>(`/books/${id}/chapters/${index}`),
+      apiGetWithAuth<Segment[]>(`/books/${id}/chapters/${index}/segments`).catch(() => []),
+      apiGetWithAuth<JobStatus>(`/books/${id}/chapters/${index}/latest-job`).catch(() => null),
+    ]);
+
+    const chapterLabel = `Chapter ${chapter.chapter_idx + 1}${chapter.title ? `: ${chapter.title}` : ""}`;
+    const needsReview = (segments as Segment[]).filter((s) => s.low_confidence).length;
 
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10">
-        <section className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Chapter {chapter.chapter_idx + 1}: {chapter.title || "Untitled"}
-            </h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">Status: {chapter.status}</p>
+      <PageShell
+        title={chapterLabel}
+        subtitle={`${chapter.status}${needsReview > 0 ? ` · ${needsReview} need${needsReview > 1 ? "" : "s"} review` : ""}`}
+        maxWidth="xl"
+        breadcrumbs={[
+          { label: "Library", href: "/library" },
+          { label: "Book", href: `/books/${id}` },
+          { label: chapterLabel },
+        ]}
+        actions={
+          <form action={processChapter} className="flex gap-2">
+            <input type="hidden" name="bookId" value={id} />
+            <input type="hidden" name="chapterIndex" value={index} />
+            <button
+              type="submit"
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              ↻ Re-process
+            </button>
+          </form>
+        }
+      >
+        {message && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            {decodeURIComponent(message)}
           </div>
-          <SignOutForm />
-        </section>
+        )}
 
-        {message ? <p className="rounded-md border px-3 py-2 text-sm">{message}</p> : null}
+        {/* Audio player */}
+        <div className="mb-6">
+          <AudioPlayer
+            bookId={id}
+            chapterIdx={index}
+            initialOutputUrl={latestJob?.output_url}
+            initialJobId={
+              latestJob && latestJob.status !== "completed" && latestJob.status !== "failed"
+                ? latestJob.job_id
+                : null
+            }
+          />
+        </div>
 
-        <form action={processChapter}>
-          <input type="hidden" name="bookId" value={id} />
-          <input type="hidden" name="chapterIndex" value={index} />
-          <button className="rounded-md border px-4 py-2 text-sm">Process Chapter</button>
-        </form>
+        {/* Segments */}
+        {(segments as Segment[]).length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 py-16 text-center dark:border-zinc-800">
+            <p className="text-sm font-medium text-zinc-500">No segments yet</p>
+            <p className="mt-1 text-xs text-zinc-400">Click Re-process to run attribution</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
+              {(["narration", "dialogue", "thought"] as const).map((t) => (
+                <span key={t} className={`rounded-full px-2.5 py-0.5 font-medium ${typeStyles[t].pill}`}>
+                  {t}
+                </span>
+              ))}
+              <span className="ml-2 text-zinc-400">{(segments as Segment[]).length} segments</span>
+            </div>
 
-        <article className="whitespace-pre-wrap rounded-lg border p-4 text-sm leading-7">
-          {chapter.raw_text}
-        </article>
+            {(segments as Segment[]).map((segment) => {
+              const styles = typeStyles[segment.type] ?? typeStyles.narration;
+              return (
+                <div
+                  key={segment.id}
+                  className={`rounded-xl border border-zinc-200 border-l-4 bg-white dark:border-zinc-800 dark:bg-zinc-900 ${styles.border} ${
+                    segment.low_confidence ? "ring-1 ring-amber-300 dark:ring-amber-700" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-2 dark:border-zinc-800">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles.pill}`}>
+                      {segment.type}
+                    </span>
+                    {segment.character_name && (
+                      <span className="text-xs text-zinc-500">{segment.character_name}</span>
+                    )}
+                    <span className="ml-auto text-xs text-zinc-400">
+                      #{segment.segment_idx + 1}
+                      {segment.confidence !== null && <> · {(segment.confidence * 100).toFixed(0)}%</>}
+                      {segment.low_confidence && <span className="ml-1 text-amber-500">⚠ review</span>}
+                    </span>
+                  </div>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold tracking-tight">Attributed Segments</h2>
-          {segments.length === 0 ? (
-            <p className="rounded-lg border p-4 text-sm text-zinc-600 dark:text-zinc-400">
-              No segments yet. Click "Process Chapter" to generate attribution output.
-            </p>
-          ) : (
-            segments.map((segment) => (
-              <article
-                key={segment.id}
-                className={`rounded-lg border p-4 text-sm ${
-                  segment.low_confidence ? "border-amber-400 bg-amber-50/50" : ""
-                }`}
-              >
-                <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">
-                  #{segment.segment_idx + 1} · {segment.type}
-                  {segment.character_name ? ` · ${segment.character_name}` : ""} · confidence: {" "}
-                  {segment.confidence === null ? "n/a" : segment.confidence.toFixed(2)}
-                  {segment.low_confidence ? " · needs review" : ""}
-                </p>
-                <p className="whitespace-pre-wrap leading-7">{segment.text}</p>
-                <form action={updateSegmentCorrection} className="mt-4 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="bookId" value={id} />
-                  <input type="hidden" name="chapterIndex" value={index} />
-                  <input type="hidden" name="segmentId" value={segment.id} />
+                  <p className="px-4 py-3 text-sm leading-7 text-zinc-800 dark:text-zinc-200">
+                    {segment.text}
+                  </p>
 
-                  <label className="text-xs">
-                    Type
+                  <form
+                    action={updateSegmentCorrection}
+                    className="flex flex-wrap items-center gap-2 border-t border-zinc-100 px-4 py-2.5 dark:border-zinc-800"
+                  >
+                    <input type="hidden" name="bookId" value={id} />
+                    <input type="hidden" name="chapterIndex" value={index} />
+                    <input type="hidden" name="segmentId" value={segment.id} />
+
                     <select
                       name="type"
                       defaultValue={segment.type}
-                      className="ml-2 rounded-md border px-2 py-1 text-xs"
+                      className="rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs focus:outline-none dark:border-zinc-700"
                     >
                       <option value="narration">narration</option>
                       <option value="dialogue">dialogue</option>
                       <option value="thought">thought</option>
                     </select>
-                  </label>
 
-                  <label className="text-xs">
-                    Character
                     <input
                       type="text"
                       name="characterName"
                       defaultValue={segment.character_name ?? ""}
-                      placeholder="Leave blank for none"
-                      className="ml-2 min-w-52 rounded-md border px-2 py-1 text-xs"
+                      placeholder="Character (optional)"
+                      className="min-w-40 rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs placeholder-zinc-400 focus:outline-none dark:border-zinc-700"
                     />
-                  </label>
 
-                  <button className="rounded-md border px-3 py-1 text-xs">Save correction</button>
-                </form>
-              </article>
-            ))
-          )}
-        </section>
-
-        <Link href={`/books/${id}`} className="text-sm underline">
-          Back to book
-        </Link>
-      </main>
+                    <button
+                      type="submit"
+                      className="rounded-md bg-zinc-900 px-3 py-1 text-xs text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                    >
+                      Save
+                    </button>
+                  </form>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </PageShell>
     );
   } catch {
     notFound();

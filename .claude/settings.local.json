@@ -15,7 +15,9 @@
       "Bash(docker-compose ps *)",
       "Bash(DATABASE_URL=\"postgresql+psycopg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe -m alembic upgrade head)",
       "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/seed_kokoro_voices.py)",
-      "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/ingest_edge_tts_voices.py --locale en)"
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/ingest_edge_tts_voices.py --locale en)",
+      "Bash(mkdir -p \"C:/Users/Vuth/Desktop/NovelTTS/frontend/src/app/api/generate/[bookId]/[chapterIdx]\")",
+      "Bash(mkdir -p \"C:/Users/Vuth/Desktop/NovelTTS/frontend/src/app/api/jobs/[jobId]\")"
     ]
   }
 }

@@ -21,7 +21,14 @@ class AudioJob(Base, TimestampMixin):
     chapter_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("chapters.id", ondelete="CASCADE"), index=True
     )
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.QUEUED)
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(
+            JobStatus,
+            name="jobstatus",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=JobStatus.QUEUED,
+    )
     provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

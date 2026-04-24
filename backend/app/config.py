@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     supabase_jwt_aud: str = "authenticated"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    r2_endpoint: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = ""
+    r2_public_url: str = ""
+    tts_provider: str = "edge_tts"  # "edge_tts" | "kokoro"
 
     model_config = SettingsConfigDict(
         # Prefer workspace root env files for a single-source local setup.

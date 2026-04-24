@@ -30,14 +30,16 @@ services:
       retries: 5
 
   backend:
-    image: python:3.11-slim
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: noveltts-backend:dev
     container_name: noveltts-backend
     working_dir: /app
     volumes:
       - ./backend:/app
     command: >
-      sh -c "pip install --no-cache-dir uv &&
-             uv sync &&
+      sh -c "uv sync &&
              uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
@@ -46,6 +48,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       APP_NAME: ${APP_NAME:-NovelTTS Backend}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      UV_PROJECT_ENVIRONMENT: /tmp/noveltts-venv
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

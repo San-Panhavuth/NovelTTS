@@ -12,7 +12,7 @@
     "dev": "concurrently -n FRONTEND,BACKEND,WORKER -c blue,green,yellow \"pnpm dev:frontend\" \"pnpm dev:backend\" \"pnpm dev:worker\"",
     "dev:frontend": "dotenv -e .env -- pnpm -F frontend dev",
     "dev:worker": "dotenv -e .env -- pnpm -F worker dev",
-    "dev:backend": "dotenv -e .env -- uv run --project backend uvicorn --app-dir backend app.main:app --reload --port 8010",
+    "dev:backend": "dotenv -e .env -v UV_PROJECT_ENVIRONMENT=backend/.uv-venv -- uv run --project backend uvicorn --app-dir backend app.main:app --reload --port 8010",
     "lint": "pnpm -r --parallel lint",
     "typecheck": "pnpm -r --parallel typecheck",
     "build": "pnpm -r build",

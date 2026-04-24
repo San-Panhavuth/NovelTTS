@@ -99,7 +99,21 @@ export type ResolvedAssignmentData = {
 };
 
 export async function listVoices(): Promise<VoiceItem[]> {
-  return apiGetWithAuth<VoiceItem[]>("/voices");
+  const voices = await apiGetWithAuth<VoiceItem[]>("/voices");
+
+  // Preview endpoint uses Edge TTS, so keep only voices that are compatible.
+  const previewableVoices = voices.filter(
+    (voice) => voice.provider === "edge_tts" && voice.provider_id.includes("Neural")
+  );
+
+  const withPreviewFallback = previewableVoices.map((voice) => {
+    if (voice.sample_url) return voice;
+    return {
+      ...voice,
+      sample_url: `/api/voices/preview?voiceId=${encodeURIComponent(voice.provider_id)}`,
+    };
+  });
+  return withPreviewFallback;
 }
 
 export async function getUserVoiceDefaults(): Promise<VoiceAssignmentData> {
@@ -141,6 +155,7 @@ export async function saveUserVoiceDefaults(formData: FormData) {
   const dialogueVoiceId = formData.get("dialogueVoiceId");
   const thoughtPitch = formData.get("thoughtPitchSemitones");
 
+  let message = "Defaults saved.";
   try {
     await updateUserVoiceDefaults(
       typeof narrationVoiceId === "string" && narrationVoiceId ? narrationVoiceId : null,
@@ -148,11 +163,10 @@ export async function saveUserVoiceDefaults(formData: FormData) {
       typeof thoughtPitch === "string" ? parseFloat(thoughtPitch) : -2.0
     );
     revalidatePath("/settings/voices");
-    redirect("/settings/voices?message=Defaults+saved.");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Save failed.";
-    redirect(`/settings/voices?message=${encodeURIComponent(message)}`);
+    message = error instanceof Error ? error.message : "Save failed.";
   }
+  redirect(`/settings/voices?message=${encodeURIComponent(message)}`);
 }
 
 export async function saveBookVoiceSettings(formData: FormData) {
@@ -165,6 +179,7 @@ export async function saveBookVoiceSettings(formData: FormData) {
     redirect("/library?message=Invalid+book+id.");
   }
 
+  let message = "Saved.";
   try {
     await updateBookVoiceSettings(
       bookId,
@@ -173,9 +188,8 @@ export async function saveBookVoiceSettings(formData: FormData) {
       typeof thoughtPitch === "string" ? parseFloat(thoughtPitch) : -2.0
     );
     revalidatePath(`/books/${bookId}/voice-settings`);
-    redirect(`/books/${bookId}/voice-settings?message=Saved.`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Save failed.";
-    redirect(`/books/${bookId}/voice-settings?message=${encodeURIComponent(message)}`);
+    message = error instanceof Error ? error.message : "Save failed.";
   }
+  redirect(`/books/${bookId}/voice-settings?message=${encodeURIComponent(message)}`);
 }

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps.auth import AuthUser, get_current_user
 from app.deps.db import get_db_session
+from app.models.audio_job import AudioJob
 from app.models.book import Book
 from app.models.chapter import Chapter
 from app.models.character import Character
@@ -65,6 +66,14 @@ class ProcessChapterResponse(BaseModel):
     chapter_idx: int
     status: str
     segment_count: int
+
+
+class LatestJobResponse(BaseModel):
+    job_id: str
+    status: str
+    progress: int
+    error: str | None
+    output_url: str | None
 
 
 class SegmentResponse(BaseModel):
@@ -528,4 +537,49 @@ async def update_chapter_segment(
         character_name=resolved_character_name,
         confidence=segment.confidence,
         low_confidence=_is_low_confidence(segment.confidence),
+    )
+
+
+@router.get(
+    "/{book_id}/chapters/{chapter_idx}/latest-job",
+    response_model=LatestJobResponse,
+)
+async def get_latest_job(
+    book_id: str,
+    chapter_idx: int,
+    auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
+    session: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> LatestJobResponse:
+    book = await session.get(Book, book_id)
+    if not book or book.user_id != auth_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    chapter = (
+        await session.execute(
+            select(Chapter).where(
+                Chapter.book_id == book_id, Chapter.chapter_idx == chapter_idx
+            )
+        )
+    ).scalar_one_or_none()
+    if chapter is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+
+    job = (
+        await session.execute(
+            select(AudioJob)
+            .where(AudioJob.chapter_id == chapter.id)
+            .order_by(AudioJob.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No job found")
+
+    return LatestJobResponse(
+        job_id=job.id,
+        status=job.status,
+        progress=job.progress,
+        error=job.error,
+        output_url=job.output_url,
     )

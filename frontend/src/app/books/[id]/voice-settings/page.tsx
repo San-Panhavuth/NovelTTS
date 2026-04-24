@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { PitchSlider } from "@/app/components/pitch-slider";
 import { SignOutForm } from "@/app/components/sign-out-form";
 import { VoicePicker } from "@/app/components/voice-picker";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -15,6 +16,15 @@ type VoiceSettingsPageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ message?: string }>;
 };
+
+function normalizeVoiceValue(raw: string | null, voices: { id: string; provider_id: string }[]): string {
+  if (!raw) return "";
+  const byProvider = voices.find((v) => v.provider_id === raw);
+  if (byProvider) return byProvider.provider_id;
+  const byId = voices.find((v) => v.id === raw);
+  if (byId) return byId.provider_id;
+  return "";
+}
 
 export default async function BookVoiceSettingsPage({ params, searchParams }: VoiceSettingsPageProps) {
   if (!isSupabaseConfigured()) {
@@ -76,7 +86,7 @@ export default async function BookVoiceSettingsPage({ params, searchParams }: Vo
           label="Narration Voice"
           name="narrationVoiceId"
           voices={voices}
-          defaultValue={resolved.narration_voice_id ?? ""}
+          defaultValue={normalizeVoiceValue(resolved.narration_voice_id, voices)}
           placeholder="(inherits from default)"
         />
 
@@ -85,7 +95,7 @@ export default async function BookVoiceSettingsPage({ params, searchParams }: Vo
           description="Also used for thought segments with the pitch offset applied below."
           name="dialogueVoiceId"
           voices={voices}
-          defaultValue={resolved.dialogue_voice_id ?? ""}
+          defaultValue={normalizeVoiceValue(resolved.dialogue_voice_id, voices)}
           placeholder="(inherits from default)"
         />
 
@@ -105,29 +115,5 @@ export default async function BookVoiceSettingsPage({ params, searchParams }: Vo
         </Link>
       </div>
     </main>
-  );
-}
-
-function PitchSlider({ defaultValue }: { defaultValue: number }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor="thoughtPitch" className="text-sm font-medium">
-        Thought Pitch Offset (semitones)
-      </label>
-      <p className="text-xs text-zinc-500">
-        Applied to the dialogue voice for inner-monologue segments. Default: −2 st.
-      </p>
-      <input
-        id="thoughtPitch"
-        type="range"
-        name="thoughtPitchSemitones"
-        min="-12"
-        max="0"
-        step="0.5"
-        defaultValue={defaultValue}
-        className="w-full"
-      />
-      <span className="text-xs text-zinc-500">Current: {defaultValue} st</span>
-    </div>
   );
 }
