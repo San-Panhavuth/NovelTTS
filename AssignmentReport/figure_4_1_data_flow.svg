@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="380" viewBox="0 0 860 380"
+     font-family="Arial, Helvetica, sans-serif">
+
+  <rect width="860" height="380" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="430" y="28" text-anchor="middle" font-size="13" font-weight="bold" fill="#000000">
+    Figure 4.1: End-to-End System Data Flow
+  </text>
+
+  <!-- ── ROW 1: left → right ── -->
+
+  <!-- Box style: fill #f0f0f0, stroke #333, rx=4 -->
+
+  <!-- 1. EPUB Upload -->
+  <rect x="20"  y="60" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="80"  y="81"  text-anchor="middle" font-size="11" font-weight="bold" fill="#000">EPUB Upload</text>
+  <text x="80"  y="97"  text-anchor="middle" font-size="9"  fill="#444">Next.js Frontend</text>
+
+  <line x1="140" y1="85" x2="162" y2="85" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 2. ebooklib Parse -->
+  <rect x="163" y="60" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="223" y="81"  text-anchor="middle" font-size="11" font-weight="bold" fill="#000">ebooklib Parse</text>
+  <text x="223" y="97"  text-anchor="middle" font-size="9"  fill="#444">FastAPI backend</text>
+
+  <line x1="283" y1="85" x2="305" y2="85" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 3. Chapter Storage -->
+  <rect x="306" y="60" width="120" height="50" rx="4" fill="#d9d9d9" stroke="#333" stroke-width="1.5"/>
+  <text x="366" y="81"  text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Chapter Storage</text>
+  <text x="366" y="97"  text-anchor="middle" font-size="9"  fill="#444">PostgreSQL / Supabase</text>
+
+  <line x1="426" y1="85" x2="448" y2="85" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 4. Chunker -->
+  <rect x="449" y="60" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="509" y="81"  text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Paragraph Chunker</text>
+  <text x="509" y="97"  text-anchor="middle" font-size="9"  fill="#444">~500 words / chunk</text>
+
+  <line x1="569" y1="85" x2="591" y2="85" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- 5. Gemini Attribution -->
+  <rect x="592" y="60" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="652" y="81"  text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Gemini Attribution</text>
+  <text x="652" y="97"  text-anchor="middle" font-size="9"  fill="#444">LLM — JSON prompt</text>
+
+  <!-- Arrow down from Gemini to row 2 -->
+  <line x1="652" y1="110" x2="652" y2="152" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── ROW 2: right → left ── -->
+
+  <!-- 6. Segment Storage -->
+  <rect x="592" y="153" width="120" height="50" rx="4" fill="#d9d9d9" stroke="#333" stroke-width="1.5"/>
+  <text x="652" y="174" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Segment Storage</text>
+  <text x="652" y="190" text-anchor="middle" font-size="9"  fill="#444">type · character · confidence</text>
+
+  <line x1="592" y1="178" x2="570" y2="178" stroke="#333" stroke-width="1.5" marker-end="url(#arrL)"/>
+
+  <!-- 7. Voice Resolution -->
+  <rect x="449" y="153" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="509" y="174" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Voice Resolution</text>
+  <text x="509" y="190" text-anchor="middle" font-size="9"  fill="#444">3-role assignment</text>
+
+  <line x1="449" y1="178" x2="427" y2="178" stroke="#333" stroke-width="1.5" marker-end="url(#arrL)"/>
+
+  <!-- 8. Edge TTS Synthesis -->
+  <rect x="306" y="153" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="366" y="174" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">Edge TTS Synthesis</text>
+  <text x="366" y="190" text-anchor="middle" font-size="9"  fill="#444">per-segment MP3</text>
+
+  <line x1="306" y1="178" x2="284" y2="178" stroke="#333" stroke-width="1.5" marker-end="url(#arrL)"/>
+
+  <!-- 9. FFmpeg Concat -->
+  <rect x="163" y="153" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="223" y="174" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">FFmpeg Concat</text>
+  <text x="223" y="190" text-anchor="middle" font-size="9"  fill="#444">re-encode → chapter MP3</text>
+
+  <line x1="163" y1="178" x2="141" y2="178" stroke="#333" stroke-width="1.5" marker-end="url(#arrL)"/>
+
+  <!-- 10. R2 Upload -->
+  <rect x="20"  y="153" width="120" height="50" rx="4" fill="#d9d9d9" stroke="#333" stroke-width="1.5"/>
+  <text x="80"  y="174" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">R2 Upload</text>
+  <text x="80"  y="190" text-anchor="middle" font-size="9"  fill="#444">Cloudflare R2</text>
+
+  <!-- Arrow down from R2 to playback -->
+  <line x1="80" y1="203" x2="80" y2="245" stroke="#333" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── ROW 3: delivery ── -->
+
+  <!-- 11. MP3 Streaming -->
+  <rect x="20"  y="246" width="120" height="50" rx="4" fill="#f0f0f0" stroke="#333" stroke-width="1.5"/>
+  <text x="80"  y="267" text-anchor="middle" font-size="11" font-weight="bold" fill="#000">MP3 Streaming</text>
+  <text x="80"  y="283" text-anchor="middle" font-size="9"  fill="#444">public URL → browser</text>
+
+  <!-- ── LEGEND ── -->
+  <rect x="730" y="60" width="115" height="80" rx="4" fill="#ffffff" stroke="#333" stroke-width="1"/>
+  <text x="787" y="78" text-anchor="middle" font-size="10" font-weight="bold" fill="#000">Legend</text>
+
+  <rect x="742" y="87" width="14" height="10" rx="2" fill="#f0f0f0" stroke="#333" stroke-width="1"/>
+  <text x="762" y="97" font-size="9" fill="#000">Processing step</text>
+
+  <rect x="742" y="107" width="14" height="10" rx="2" fill="#d9d9d9" stroke="#333" stroke-width="1"/>
+  <text x="762" y="117" font-size="9" fill="#000">Data store</text>
+
+  <!-- Arrow marker definitions -->
+  <defs>
+    <marker id="arr"  markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#333"/>
+    </marker>
+    <marker id="arrL" markerWidth="7" markerHeight="7" refX="1" refY="3" orient="auto">
+      <path d="M7,0 L7,6 L0,3 z" fill="#333"/>
+    </marker>
+  </defs>
+
+</svg>

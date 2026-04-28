@@ -51,12 +51,20 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
         maxWidth="xl"
         breadcrumbs={[{ label: "Library", href: "/library" }, { label: book.title }]}
         actions={
-          <Link
-            href={`/books/${book.id}/voice-settings`}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          >
-            🎙 Voice Settings
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href={`/books/${book.id}/pronunciations`}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              Pronunciations
+            </Link>
+            <Link
+              href={`/books/${book.id}/voice-settings`}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              🎙 Voice Settings
+            </Link>
+          </div>
         }
       >
         <div className="space-y-2">

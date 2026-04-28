@@ -17,7 +17,17 @@
       "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/seed_kokoro_voices.py)",
       "Bash(DATABASE_URL=\"postgresql+asyncpg://noveltts:noveltts_dev@localhost:6543/noveltts\" .venv/Scripts/python.exe scripts/ingest_edge_tts_voices.py --locale en)",
       "Bash(mkdir -p \"C:/Users/Vuth/Desktop/NovelTTS/frontend/src/app/api/generate/[bookId]/[chapterIdx]\")",
-      "Bash(mkdir -p \"C:/Users/Vuth/Desktop/NovelTTS/frontend/src/app/api/jobs/[jobId]\")"
+      "Bash(mkdir -p \"C:/Users/Vuth/Desktop/NovelTTS/frontend/src/app/api/jobs/[jobId]\")",
+      "Bash(python -m pytest backend/tests --collect-only -q)",
+      "Bash(python -m pytest backend/tests -q --tb=no)",
+      "WebFetch(domain:azure.microsoft.com)",
+      "WebFetch(domain:deepmind.google)",
+      "WebFetch(domain:ffmpeg.org)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:elevenlabs.io)",
+      "WebFetch(domain:github.com)",
+      "WebSearch"
     ]
   }
 }

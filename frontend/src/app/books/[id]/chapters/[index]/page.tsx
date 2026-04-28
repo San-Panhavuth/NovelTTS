@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { PageShell } from "@/app/components/page-shell";
 import { AudioPlayer } from "@/app/components/audio-player";
 import { processChapter, updateSegmentCorrection } from "@/app/books/actions";
@@ -83,16 +84,24 @@ export default async function ChapterPage({ params, searchParams }: ChapterPageP
           { label: chapterLabel },
         ]}
         actions={
-          <form action={processChapter} className="flex gap-2">
-            <input type="hidden" name="bookId" value={id} />
-            <input type="hidden" name="chapterIndex" value={index} />
-            <button
-              type="submit"
+          <div className="flex gap-2">
+            <Link
+              href={`/books/${id}/pronunciations`}
               className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
-              ↻ Re-process
-            </button>
-          </form>
+              Pronunciations
+            </Link>
+            <form action={processChapter} className="flex gap-2">
+              <input type="hidden" name="bookId" value={id} />
+              <input type="hidden" name="chapterIndex" value={index} />
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                ↻ Re-process
+              </button>
+            </form>
+          </div>
         }
       >
         {message && (

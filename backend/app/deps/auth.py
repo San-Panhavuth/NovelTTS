@@ -185,4 +185,15 @@ async def get_current_user(
     return AuthUser(id=claims["sub"], email=claims.get("email"))
 
 
+async def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+) -> str:
+    """Extract and return just the user ID from JWT."""
+    if credentials is None:
+        _raise_unauthorized("Missing bearer token")
+
+    claims = _verify_supabase_jwt(credentials.credentials)
+    return claims["sub"]
+
+
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]

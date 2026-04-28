@@ -73,3 +73,13 @@ Mark Phase 4 done only when:
 - manual audio quality checks pass on multiple chapters
 - failure/retry behavior validated in live flow
 - backend test suite remains green
+
+## Current status (2026-04-24)
+
+- ✅ Backend test suite gate: `32 passed` via
+  `backend/backend/.uv-venv/Scripts/python.exe -m pytest backend/tests`
+- ✅ Voice settings save path stabilized (provider_id to UUID resolution + regression test added)
+- ✅ Preview UX stabilized for supported Edge voices, including thought preview
+- ⬜ Runtime validation script pending live credentials:
+  - `run_phase4_runtime_validation.py --book-id <BOOK_ID> --bearer-token <JWT> ...`
+- ⬜ Manual audio QA pass pending (3+ chapters playback quality + retry behavior checks)

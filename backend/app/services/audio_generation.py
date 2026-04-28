@@ -15,10 +15,12 @@ from app.config import settings
 from app.models.audio_job import AudioJob
 from app.models.chapter import Chapter
 from app.models.enums import JobStatus, SegmentType
+from app.models.pronunciation_entry import PronunciationEntry
 from app.models.segment import Segment
 from app.models.voice import Voice
 from app.models.voice_assignment import VoiceAssignment
 from app.providers.tts.edge import EdgeTTSProvider
+from app.services.ssml_injector import inject_ssml
 
 logger = logging.getLogger(__name__)
 SEGMENT_SYNTH_MAX_RETRIES = 3
@@ -84,18 +86,26 @@ async def _synthesize_with_retries(
     dialogue_voice: str,
     narration_voice: str,
     thought_pitch: float,
+    pronunciation_entries: list[PronunciationEntry] | None = None,
     max_retries: int = SEGMENT_SYNTH_MAX_RETRIES,
 ) -> bytes:
     last_error: Exception | None = None
     active_dialogue_voice = dialogue_voice if _is_valid_edge_voice_id(dialogue_voice) else DEFAULT_EDGE_VOICE
     active_narration_voice = narration_voice if _is_valid_edge_voice_id(narration_voice) else DEFAULT_EDGE_VOICE
+    
+    # Apply SSML injection if pronunciation entries exist
+    synthesis_text = text
+    if pronunciation_entries:
+        synthesis_text = inject_ssml(text, pronunciation_entries)
+        logger.debug("ssml_injected_for_segment, num_entries=%d", len(pronunciation_entries))
+    
     for attempt in range(1, max_retries + 1):
         try:
             if seg_type == SegmentType.NARRATION:
-                return await tts.synthesize(text, active_narration_voice)
+                return await tts.synthesize(synthesis_text, active_narration_voice)
             if seg_type == SegmentType.THOUGHT:
-                return await tts.synthesize_with_pitch(text, active_dialogue_voice, thought_pitch)
-            return await tts.synthesize(text, active_dialogue_voice)
+                return await tts.synthesize_with_pitch(synthesis_text, active_dialogue_voice, thought_pitch)
+            return await tts.synthesize(synthesis_text, active_dialogue_voice)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             if "Invalid voice" in str(exc):
@@ -251,6 +261,20 @@ async def run_generation(job_id: str, user_id: str) -> None:
                 )
                 dialogue_voice = DEFAULT_EDGE_VOICE
 
+            # Fetch pronunciation entries for SSML injection
+            pronunciation_entries = (
+                await session.execute(
+                    select(PronunciationEntry).where(PronunciationEntry.book_id == book_id)
+                )
+            ).scalars().all()
+            # Fetch pronunciation entries for SSML injection
+            pronunciation_entries = (
+                await session.execute(
+                    select(PronunciationEntry).where(PronunciationEntry.book_id == book_id)
+                )
+            ).scalars().all()
+            logger.info("generation: fetched %d pronunciation entries for book", len(pronunciation_entries))
+
             tts = EdgeTTSProvider()
             chunk_paths: list[Path] = []
             total = len(segments)
@@ -267,6 +291,7 @@ async def run_generation(job_id: str, user_id: str) -> None:
                             dialogue_voice=dialogue_voice,
                             narration_voice=narration_voice,
                             thought_pitch=thought_pitch,
+                            pronunciation_entries=pronunciation_entries if pronunciation_entries else None,
                         )
 
                         chunk_file = tmp / f"{i:05d}.mp3"

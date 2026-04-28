@@ -2,7 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { apiGetWithAuth, apiPatchWithAuth, apiPostWithAuth, apiPutWithAuth } from "@/lib/backend";
+import {
+  addBookPronunciation,
+  apiGetWithAuth,
+  apiPatchWithAuth,
+  apiPostWithAuth,
+  apiPutWithAuth,
+  deleteBookPronunciation,
+  inferBookPronunciations,
+  updateBookPronunciation,
+} from "@/lib/backend";
 
 type ProcessChapterResult = {
   chapter_id: string;
@@ -192,4 +201,102 @@ export async function saveBookVoiceSettings(formData: FormData) {
     message = error instanceof Error ? error.message : "Save failed.";
   }
   redirect(`/books/${bookId}/voice-settings?message=${encodeURIComponent(message)}`);
+}
+
+export async function inferBookPronunciationDictionary(formData: FormData) {
+  const bookId = formData.get("bookId");
+
+  if (typeof bookId !== "string") {
+    redirect("/library?message=Invalid pronunciation request.");
+  }
+
+  let message = "Pronunciation inference complete.";
+  try {
+    const result = await inferBookPronunciations(bookId);
+    revalidatePath(`/books/${bookId}/pronunciations`);
+    message = `Inferred ${result.inference_metadata.unique_terms} pronunciation${
+      result.inference_metadata.unique_terms === 1 ? "" : "s"
+    } from ${result.inference_metadata.segments_processed} segment${
+      result.inference_metadata.segments_processed === 1 ? "" : "s"
+    }.`;
+  } catch (error) {
+    message = error instanceof Error ? error.message : "Inference failed.";
+  }
+
+  redirect(`/books/${bookId}/pronunciations?message=${encodeURIComponent(message)}`);
+}
+
+export async function createBookPronunciation(formData: FormData) {
+  const bookId = formData.get("bookId");
+  const term = formData.get("term");
+  const phoneme = formData.get("phoneme");
+  const languageCode = formData.get("languageCode");
+
+  if (typeof bookId !== "string" || typeof term !== "string" || typeof phoneme !== "string") {
+    redirect("/library?message=Invalid pronunciation request.");
+  }
+
+  let message = "Pronunciation saved.";
+  try {
+    await addBookPronunciation(bookId, {
+      term,
+      phoneme,
+      language_code: typeof languageCode === "string" && languageCode ? languageCode : null,
+    });
+    revalidatePath(`/books/${bookId}/pronunciations`);
+  } catch (error) {
+    message = error instanceof Error ? error.message : "Save failed.";
+  }
+
+  redirect(`/books/${bookId}/pronunciations?message=${encodeURIComponent(message)}`);
+}
+
+export async function updateBookPronunciationEntry(formData: FormData) {
+  const bookId = formData.get("bookId");
+  const entryId = formData.get("entryId");
+  const term = formData.get("term");
+  const phoneme = formData.get("phoneme");
+  const languageCode = formData.get("languageCode");
+
+  if (
+    typeof bookId !== "string" ||
+    typeof entryId !== "string" ||
+    typeof term !== "string" ||
+    typeof phoneme !== "string"
+  ) {
+    redirect("/library?message=Invalid pronunciation update.");
+  }
+
+  let message = "Pronunciation updated.";
+  try {
+    await updateBookPronunciation(bookId, entryId, {
+      term,
+      phoneme,
+      language_code: typeof languageCode === "string" && languageCode ? languageCode : null,
+    });
+    revalidatePath(`/books/${bookId}/pronunciations`);
+  } catch (error) {
+    message = error instanceof Error ? error.message : "Update failed.";
+  }
+
+  redirect(`/books/${bookId}/pronunciations?message=${encodeURIComponent(message)}`);
+}
+
+export async function deleteBookPronunciationEntry(formData: FormData) {
+  const bookId = formData.get("bookId");
+  const entryId = formData.get("entryId");
+
+  if (typeof bookId !== "string" || typeof entryId !== "string") {
+    redirect("/library?message=Invalid pronunciation delete request.");
+  }
+
+  let message = "Pronunciation deleted.";
+  try {
+    await deleteBookPronunciation(bookId, entryId);
+    revalidatePath(`/books/${bookId}/pronunciations`);
+  } catch (error) {
+    message = error instanceof Error ? error.message : "Delete failed.";
+  }
+
+  redirect(`/books/${bookId}/pronunciations?message=${encodeURIComponent(message)}`);
 }
