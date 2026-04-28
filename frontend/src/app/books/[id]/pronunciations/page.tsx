@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageShell } from "@/app/components/page-shell";
+import { FlashMessage } from "@/app/components/flash_message";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import {
   createBookPronunciation,
@@ -73,11 +74,7 @@ export default async function BookPronunciationsPage({ params, searchParams }: P
         </Link>
       }
     >
-      {message && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
-          {decodeURIComponent(message)}
-        </div>
-      )}
+      {message && <FlashMessage variant="success" />}
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">

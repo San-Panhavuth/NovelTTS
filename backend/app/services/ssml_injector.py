@@ -7,6 +7,51 @@ from typing import Any
 from xml.sax.saxutils import escape
 
 
+def _collect_term_replacements(entries: list[dict | Any]) -> list[tuple[str, str]]:
+    """Normalize entries into (term, replacement) tuples sorted by longest term first."""
+    term_replacements = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            term = entry.get("term", "").strip()
+            replacement = entry.get("phoneme", "").strip()
+        else:
+            term = getattr(entry, "term", "").strip()
+            replacement = getattr(entry, "phoneme", "").strip()
+
+        if term and replacement:
+            term_replacements.append((term, replacement))
+
+    term_replacements.sort(key=lambda x: len(x[0]), reverse=True)
+    return term_replacements
+
+
+def _term_pattern(term: str) -> str:
+    escaped_term = re.escape(term)
+    return rf"\b{escaped_term}\b"
+
+
+def apply_pronunciation_overrides(text: str, entries: list[dict | Any]) -> str:
+    """
+    Replace matched terms with their pronunciation override as plain text.
+
+    Edge TTS does not support arbitrary custom SSML phoneme tags, so this helper is used
+    to make pronunciation overrides still affect spoken output by substituting the text
+    directly before synthesis.
+    """
+    if not entries or not text:
+        return text
+
+    result = text
+    for term, replacement in _collect_term_replacements(entries):
+        pattern = _term_pattern(term)
+        try:
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+        except re.error:
+            continue
+
+    return result
+
+
 def inject_ssml(text: str, entries: list[dict | Any]) -> str:
     """
     Inject SSML <phoneme> tags into text based on pronunciation entries.
@@ -29,35 +74,13 @@ def inject_ssml(text: str, entries: list[dict | Any]) -> str:
     if not entries or not text:
         return text
 
-    # Convert entries to list of (term, phoneme) tuples, sorted by length (longest first)
-    # This ensures longest-match preference.
-    term_phoneme_pairs = []
-    for entry in entries:
-        if isinstance(entry, dict):
-            term = entry.get("term", "").strip()
-            phoneme = entry.get("phoneme", "").strip()
-        else:
-            # Assume it's a model instance (PronunciationEntry)
-            term = getattr(entry, "term", "").strip()
-            phoneme = getattr(entry, "phoneme", "").strip()
-
-        if term and phoneme:
-            term_phoneme_pairs.append((term, phoneme))
-
+    term_phoneme_pairs = _collect_term_replacements(entries)
     if not term_phoneme_pairs:
         return text
 
-    # Sort by term length (longest first) to ensure longest-match preference
-    term_phoneme_pairs.sort(key=lambda x: len(x[0]), reverse=True)
-
     result = text
     for term, phoneme in term_phoneme_pairs:
-        # Escape special regex chars in the term
-        escaped_term = re.escape(term)
-
-        # Build regex pattern with word boundaries
-        # \b works for ASCII; for CJK we just match exact string
-        pattern = rf"\b{escaped_term}\b"
+        pattern = _term_pattern(term)
 
         # Replace all matches (case-insensitive)
         def replacer(match: re.Match) -> str:

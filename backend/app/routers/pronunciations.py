@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -282,7 +283,14 @@ async def add_pronunciation(
     if existing:
         existing.phoneme = phoneme
         existing.language_code = language_code
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A pronunciation entry with that term already exists for this book.",
+            ) from None
         entry = existing
     else:
         entry = PronunciationEntry(
@@ -293,7 +301,14 @@ async def add_pronunciation(
             language_code=language_code,
         )
         db.add(entry)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A pronunciation entry with that term already exists for this book.",
+            ) from None
 
     return PronunciationEntrySchema(entry).dict()
 
@@ -331,7 +346,14 @@ async def update_pronunciation(
     if "language_code" in request_data:
         entry.language_code = request_data.get("language_code")
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A pronunciation entry with that term already exists for this book.",
+        ) from None
     return PronunciationEntrySchema(entry).dict()
 
 

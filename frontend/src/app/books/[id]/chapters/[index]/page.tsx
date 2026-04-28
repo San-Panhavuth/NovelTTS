@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { PageShell } from "@/app/components/page-shell";
 import { AudioPlayer } from "@/app/components/audio-player";
+import { FlashMessage } from "@/app/components/flash_message";
 import { processChapter, updateSegmentCorrection } from "@/app/books/actions";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import { apiGetWithAuth } from "@/lib/backend";
@@ -104,11 +105,7 @@ export default async function ChapterPage({ params, searchParams }: ChapterPageP
           </div>
         }
       >
-        {message && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            {decodeURIComponent(message)}
-          </div>
-        )}
+        {message && <FlashMessage variant="warning" />}
 
         {/* Audio player */}
         <div className="mb-6">

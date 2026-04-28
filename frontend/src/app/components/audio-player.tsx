@@ -124,15 +124,17 @@ export function AudioPlayer({ bookId, chapterIdx, initialOutputUrl, initialJobId
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Audio</h3>
-        {status !== "completed" && (
-          <button
-            onClick={handleGenerate}
-            disabled={generating || status === "queued" || status === "processing"}
-            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {status === "queued" || status === "processing" ? "Generating…" : "Generate Audio"}
-          </button>
-        )}
+        <button
+          onClick={handleGenerate}
+          disabled={generating || status === "queued" || status === "processing"}
+          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {status === "queued" || status === "processing"
+            ? "Generating…"
+            : status === "completed"
+              ? "Regenerate Audio"
+              : "Generate Audio"}
+        </button>
       </div>
 
       {(status === "queued" || status === "processing") && (

@@ -4,7 +4,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from app.services.ssml_injector import inject_ssml
+from app.services.ssml_injector import apply_pronunciation_overrides, inject_ssml
 
 
 def parse_ssml(ssml_text: str) -> ET.Element:
@@ -291,3 +291,13 @@ class TestSSMLInjection:
         # The exact behavior depends on regex \b behavior with punctuation
         # This tests the implementation handles it reasonably
         assert "hello!" in text
+
+    def test_plain_text_override_replaces_term_for_edge_tts(self) -> None:
+        entries = [
+            {"term": "Baek Saheon", "phoneme": "blah blah"},
+        ]
+        text = "Baek Saheon?"
+
+        result = apply_pronunciation_overrides(text, entries)
+
+        assert result == "blah blah?"

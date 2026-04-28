@@ -20,7 +20,7 @@ from app.models.segment import Segment
 from app.models.voice import Voice
 from app.models.voice_assignment import VoiceAssignment
 from app.providers.tts.edge import EdgeTTSProvider
-from app.services.ssml_injector import inject_ssml
+from app.services.ssml_injector import apply_pronunciation_overrides
 
 logger = logging.getLogger(__name__)
 SEGMENT_SYNTH_MAX_RETRIES = 3
@@ -93,11 +93,15 @@ async def _synthesize_with_retries(
     active_dialogue_voice = dialogue_voice if _is_valid_edge_voice_id(dialogue_voice) else DEFAULT_EDGE_VOICE
     active_narration_voice = narration_voice if _is_valid_edge_voice_id(narration_voice) else DEFAULT_EDGE_VOICE
     
-    # Apply SSML injection if pronunciation entries exist
+    # Edge TTS cannot consume arbitrary phoneme SSML, so replace matched terms
+    # with the stored pronunciation override directly before synthesis.
     synthesis_text = text
     if pronunciation_entries:
-        synthesis_text = inject_ssml(text, pronunciation_entries)
-        logger.debug("ssml_injected_for_segment, num_entries=%d", len(pronunciation_entries))
+        synthesis_text = apply_pronunciation_overrides(text, pronunciation_entries)
+        logger.debug(
+            "pronunciation_overrides_applied_for_segment, num_entries=%d",
+            len(pronunciation_entries),
+        )
     
     for attempt in range(1, max_retries + 1):
         try:
