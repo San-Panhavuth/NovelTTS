@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+import asyncio
 
 import pytest
 
 from app.models.enums import SegmentType
-from app.services.audio_generation import _run_ffmpeg_concat, _synthesize_with_retries
+from app.services.audio_generation import (
+    _derive_r2_key_from_audio_url,
+    _run_ffmpeg_concat,
+    _segment_content_hash,
+    _synthesize_with_retries,
+)
 
 
 class _FlakyTTS:
@@ -42,6 +48,31 @@ async def test_synthesize_with_retries_recovers_after_transient_failure() -> Non
 
 
 @pytest.mark.asyncio
+async def test_synthesize_with_retries_uses_backoff_between_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+
+    tts = _FlakyTTS(failures=2)
+    audio = await _synthesize_with_retries(
+        tts=tts,
+        seg_type=SegmentType.DIALOGUE,
+        text="hello",
+        dialogue_voice="edge-voice",
+        narration_voice="edge-voice",
+        thought_pitch=-2.0,
+        max_retries=3,
+    )
+
+    assert audio == b"audio"
+    # 2 failures -> sleep called twice (between attempt1->2 and attempt2->3)
+    assert len(sleeps) == 2
+
+
+@pytest.mark.asyncio
 async def test_synthesize_with_retries_raises_after_max_attempts() -> None:
     tts = _FlakyTTS(failures=5)
     with pytest.raises(RuntimeError, match="after 3 attempts"):
@@ -68,3 +99,33 @@ def test_run_ffmpeg_concat_reports_missing_binary(monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(RuntimeError, match="FFmpeg executable was not found"):
         _run_ffmpeg_concat(concat_list=concat_file, output_mp3=output_file)
+
+
+def test_segment_content_hash_changes_when_pitch_changes() -> None:
+    base = _segment_content_hash(
+        provider="edge_tts",
+        provider_voice_id="en-US-AriaNeural",
+        seg_type=SegmentType.THOUGHT,
+        synthesis_text="hello",
+        thought_pitch=-2.0,
+    )
+    other = _segment_content_hash(
+        provider="edge_tts",
+        provider_voice_id="en-US-AriaNeural",
+        seg_type=SegmentType.THOUGHT,
+        synthesis_text="hello",
+        thought_pitch=-3.0,
+    )
+    assert base != other
+
+
+def test_derive_r2_key_from_audio_url_supports_r2_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.audio_generation.settings.r2_public_url", "")
+    assert _derive_r2_key_from_audio_url("r2://audio/x.mp3") == "audio/x.mp3"
+
+
+def test_derive_r2_key_from_audio_url_supports_public_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.audio_generation.settings.r2_public_url", "https://cdn.example.com")
+    assert (
+        _derive_r2_key_from_audio_url("https://cdn.example.com/audio/x.mp3") == "audio/x.mp3"
+    )

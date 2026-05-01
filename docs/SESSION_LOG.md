@@ -4,6 +4,42 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-04-28 — Phase 4 status corrected after code review
+
+### Completed
+- Reviewed current implementation against `docs/DEV_PLAN.md` and corrected Phase 3/4 status drift.
+- Confirmed Phase 4 items are implemented in code:
+  - Audio caching in generation pipeline (`Segment.content_hash` + `Segment.audio_url` reuse)
+  - Retry logic for segment synthesis (max 3 attempts)
+  - BullMQ queue wiring (backend enqueue + worker callback endpoint)
+- Updated plan wording for pronunciation integration to match the current Edge TTS behavior (text substitution for overrides).
+
+### Next
+- Finish the remaining pronunciation-inference gap: persist LLM-inferred phonemes directly (currently inference endpoint stores empty phoneme placeholders for new terms).
+- Continue with post-MVP Phase 5 playback UX items.
+
+### Decisions
+- Keep Kokoro skipped for MVP/local flow; Edge TTS remains the active production path.
+- Track pronunciation inference as partially complete until inferred phonemes are persisted end-to-end without manual fill.
+
+### Blockers
+- none
+
+---
+
+## Session 2026-04-28 — Kokoro cancelled (skip)
+
+### Decisions
+- 🛑 **Skip Kokoro** for local dev + MVP. Keep **Edge TTS** as the supported provider.
+
+### Rationale
+- Kokoro pulls in `torch` (large) and local setup adds friction (disk/GPU/system deps) without being required for Phase 4 MVP.
+
+### Next
+- Continue Phase 4: audio caching, retry logic, and generation UX polish using Edge TTS only.
+
+---
+
 ## Session 2026-04-24 — Dropped per-character AI; introduced 3-role voice system
 
 ### Completed

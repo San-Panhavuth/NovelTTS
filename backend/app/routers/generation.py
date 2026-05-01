@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.deps.auth import AuthUser, get_current_user
 from app.deps.db import get_db_session
 from app.models.audio_job import AudioJob
@@ -16,6 +17,7 @@ from app.models.book import Book
 from app.models.chapter import Chapter
 from app.models.enums import JobStatus
 from app.services.audio_generation import run_generation
+from app.services.job_queue import enqueue_audio_generation_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["generation"])
@@ -62,7 +64,6 @@ async def _load_chapter(
 async def generate_chapter_audio(
     book_id: str,
     chapter_idx: int,
-    background_tasks: BackgroundTasks,
     auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> GenerateResponse:
@@ -96,9 +97,26 @@ async def generate_chapter_audio(
     await session.commit()
 
     logger.info("generation: enqueued job=%s chapter=%s", job.id, chapter.id)
-    background_tasks.add_task(run_generation, job.id, auth_user.id)
+    await enqueue_audio_generation_job(job.id, auth_user.id)
 
     return GenerateResponse(job_id=job.id, status=JobStatus.QUEUED)
+
+
+class WorkerGenerateRequest(BaseModel):
+    job_id: str
+    user_id: str
+
+
+@router.post("/internal/worker/audio-generate", status_code=status.HTTP_202_ACCEPTED)
+async def internal_worker_audio_generate(
+    body: WorkerGenerateRequest,
+    x_worker_secret: str | None = Header(default=None),
+) -> dict[str, str]:
+    if x_worker_secret != settings.worker_shared_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized worker")
+
+    await run_generation(body.job_id, body.user_id)
+    return {"status": "accepted"}
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)

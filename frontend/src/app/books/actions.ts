@@ -107,22 +107,45 @@ export type ResolvedAssignmentData = {
   thought_pitch_semitones: number;
 };
 
+const VOICE_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedVoices: VoiceItem[] | null = null;
+let voicesCachedAt = 0;
+let voicesInFlight: Promise<VoiceItem[]> | null = null;
+
 export async function listVoices(): Promise<VoiceItem[]> {
-  const voices = await apiGetWithAuth<VoiceItem[]>("/voices");
+  const now = Date.now();
+  if (cachedVoices && now - voicesCachedAt < VOICE_CACHE_TTL_MS) {
+    return cachedVoices;
+  }
 
-  // Preview endpoint uses Edge TTS, so keep only voices that are compatible.
-  const previewableVoices = voices.filter(
-    (voice) => voice.provider === "edge_tts" && voice.provider_id.includes("Neural")
-  );
+  if (!voicesInFlight) {
+    voicesInFlight = (async () => {
+      const voices = await apiGetWithAuth<VoiceItem[]>("/voices");
 
-  const withPreviewFallback = previewableVoices.map((voice) => {
-    if (voice.sample_url) return voice;
-    return {
-      ...voice,
-      sample_url: `/api/voices/preview?voiceId=${encodeURIComponent(voice.provider_id)}`,
-    };
-  });
-  return withPreviewFallback;
+      // Preview endpoint uses Edge TTS, so keep only voices that are compatible.
+      const previewableVoices = voices.filter(
+        (voice) => voice.provider === "edge_tts" && voice.provider_id.includes("Neural")
+      );
+
+      const withPreviewFallback = previewableVoices.map((voice) => {
+        if (voice.sample_url) return voice;
+        return {
+          ...voice,
+          sample_url: `/api/voices/preview?voiceId=${encodeURIComponent(voice.provider_id)}`,
+        };
+      });
+
+      cachedVoices = withPreviewFallback;
+      voicesCachedAt = Date.now();
+      return withPreviewFallback;
+    })();
+  }
+
+  try {
+    return await voicesInFlight;
+  } finally {
+    voicesInFlight = null;
+  }
 }
 
 export async function getUserVoiceDefaults(): Promise<VoiceAssignmentData> {

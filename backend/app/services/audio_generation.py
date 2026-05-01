@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import asyncio
+import random
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -25,6 +28,7 @@ from app.services.ssml_injector import apply_pronunciation_overrides
 logger = logging.getLogger(__name__)
 SEGMENT_SYNTH_MAX_RETRIES = 3
 DEFAULT_EDGE_VOICE = "en-US-AriaNeural"
+SEGMENT_AUDIO_CACHE_PREFIX = "audio/segments"
 
 
 def _resolve_ffmpeg_binary() -> str:
@@ -49,8 +53,32 @@ def _to_asyncpg_url(url: str) -> str:
     return url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
-def _content_hash(text: str, voice_id: str) -> str:
-    return hashlib.sha256(f"{voice_id}:{text}".encode()).hexdigest()[:16]
+def _segment_content_hash(
+    *,
+    provider: str,
+    provider_voice_id: str,
+    seg_type: SegmentType,
+    synthesis_text: str,
+    thought_pitch: float,
+) -> str:
+    """Stable fingerprint for caching synthesized segment audio.
+
+    We hash the *effective* synthesis inputs (provider + voice + type + pitch + text).
+    Pronunciation overrides are already applied in `synthesis_text`.
+    """
+    payload = "\n".join(
+        [
+            "v2",
+            provider,
+            provider_voice_id,
+            seg_type.value,
+            # Include pitch even for non-thought segments so changing default pitch doesn't
+            # accidentally reuse a stale cache if segment types change later.
+            f"{thought_pitch:.3f}",
+            synthesis_text,
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
 def _is_valid_edge_voice_id(voice_id: str | None) -> bool:
@@ -88,6 +116,7 @@ async def _synthesize_with_retries(
     thought_pitch: float,
     pronunciation_entries: list[PronunciationEntry] | None = None,
     max_retries: int = SEGMENT_SYNTH_MAX_RETRIES,
+    text_is_preprocessed: bool = False,
 ) -> bytes:
     last_error: Exception | None = None
     active_dialogue_voice = dialogue_voice if _is_valid_edge_voice_id(dialogue_voice) else DEFAULT_EDGE_VOICE
@@ -96,7 +125,7 @@ async def _synthesize_with_retries(
     # Edge TTS cannot consume arbitrary phoneme SSML, so replace matched terms
     # with the stored pronunciation override directly before synthesis.
     synthesis_text = text
-    if pronunciation_entries:
+    if (not text_is_preprocessed) and pronunciation_entries:
         synthesis_text = apply_pronunciation_overrides(text, pronunciation_entries)
         logger.debug(
             "pronunciation_overrides_applied_for_segment, num_entries=%d",
@@ -121,7 +150,87 @@ async def _synthesize_with_retries(
                 max_retries,
                 exc,
             )
+            if attempt < max_retries:
+                # Small exponential backoff with jitter for transient Edge TTS failures.
+                backoff = min(1.0, 0.25 * (2 ** (attempt - 1)))
+                await asyncio.sleep(backoff + random.uniform(0, 0.1))
     raise RuntimeError(f"Segment synthesis failed after {max_retries} attempts: {last_error}")
+
+
+def _derive_r2_key_from_audio_url(audio_url: str) -> str | None:
+    if audio_url.startswith("r2://"):
+        return audio_url.removeprefix("r2://")
+
+    public_base = (settings.r2_public_url or "").rstrip("/")
+    if public_base and audio_url.startswith(f"{public_base}/"):
+        return audio_url.removeprefix(f"{public_base}/")
+    return None
+
+
+async def _fetch_audio_by_url(audio_url: str) -> bytes | None:
+    """Best-effort cache fetch. Returns None if not fetchable."""
+    if audio_url.startswith("local://"):
+        try:
+            return Path(audio_url.removeprefix("local://")).read_bytes()
+        except OSError:
+            return None
+
+    key = _derive_r2_key_from_audio_url(audio_url)
+    if not key:
+        return None
+
+    try:
+        from app.providers.storage.r2 import get_storage_provider
+
+        storage = get_storage_provider()
+        return await storage.get(key)
+    except Exception:  # noqa: BLE001 - cache fetch is best-effort
+        return None
+
+
+async def _put_segment_audio(
+    *,
+    audio_bytes: bytes,
+    book_id: str,
+    chapter_id: str,
+    segment_idx: int,
+    content_hash: str,
+) -> str:
+    """Store per-segment audio for caching and return an `audio_url`."""
+    key = f"{SEGMENT_AUDIO_CACHE_PREFIX}/{book_id}/{chapter_id}/{segment_idx:05d}_{content_hash}.mp3"
+
+    if not settings.r2_endpoint or not settings.r2_bucket:
+        out = Path(tempfile.gettempdir()) / f"noveltts_seg_{chapter_id}_{segment_idx:05d}_{content_hash}.mp3"
+        out.write_bytes(audio_bytes)
+        return f"local://{out}"
+
+    from app.providers.storage.r2 import get_storage_provider
+
+    storage = get_storage_provider()
+    return await storage.put(key, audio_bytes)
+
+
+def _write_silence_mp3(path: Path, seconds: float = 0.2) -> None:
+    """Generate a short silence MP3 so concat ordering stays stable."""
+    ffmpeg_cmd = [
+        _resolve_ffmpeg_binary(),
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=24000:cl=mono",
+        "-t",
+        str(seconds),
+        "-c:a",
+        "libmp3lame",
+        "-q:a",
+        "6",
+        str(path),
+    ]
+    result = subprocess.run(ffmpeg_cmd, capture_output=True, timeout=60)
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="ignore").strip()
+        raise RuntimeError(stderr or "Failed to generate silence placeholder")
 
 
 def _run_ffmpeg_concat(concat_list: Path, output_mp3: Path) -> None:
@@ -271,12 +380,6 @@ async def run_generation(job_id: str, user_id: str) -> None:
                     select(PronunciationEntry).where(PronunciationEntry.book_id == book_id)
                 )
             ).scalars().all()
-            # Fetch pronunciation entries for SSML injection
-            pronunciation_entries = (
-                await session.execute(
-                    select(PronunciationEntry).where(PronunciationEntry.book_id == book_id)
-                )
-            ).scalars().all()
             logger.info("generation: fetched %d pronunciation entries for book", len(pronunciation_entries))
 
             tts = EdgeTTSProvider()
@@ -287,15 +390,63 @@ async def run_generation(job_id: str, user_id: str) -> None:
                 tmp = Path(tmpdir)
 
                 for i, seg in enumerate(segments):
+                    # Apply pronunciation overrides once so hashing + synthesis match.
+                    synthesis_text = seg.text
+                    if pronunciation_entries:
+                        synthesis_text = apply_pronunciation_overrides(seg.text, pronunciation_entries)
+
+                    # Determine which voice this segment will use.
+                    provider = "edge_tts"
+                    provider_voice_id = narration_voice if seg.type == SegmentType.NARRATION else dialogue_voice
+                    pitch_for_hash = thought_pitch if seg.type == SegmentType.THOUGHT else 0.0
+
+                    desired_hash = _segment_content_hash(
+                        provider=provider,
+                        provider_voice_id=provider_voice_id,
+                        seg_type=seg.type,
+                        synthesis_text=synthesis_text,
+                        thought_pitch=pitch_for_hash,
+                    )
+
+                    # Cache hit: segment already synthesized with same inputs.
+                    if seg.content_hash == desired_hash and seg.audio_url:
+                        cached = await _fetch_audio_by_url(seg.audio_url)
+                        if cached:
+                            chunk_file = tmp / f"{i:05d}.mp3"
+                            chunk_file.write_bytes(cached)
+                            chunk_paths.append(chunk_file)
+                            logger.info(
+                                "generation: job=%s segment=%d/%d cache_hit",
+                                job_id,
+                                i + 1,
+                                total,
+                            )
+                            progress = int((i + 1) / total * 80)
+                            await _set_job_status(
+                                session, job, JobStatus.PROCESSING, progress=progress
+                            )
+                            continue
+
                     try:
                         audio = await _synthesize_with_retries(
                             tts=tts,
                             seg_type=seg.type,
-                            text=seg.text,
+                            text=synthesis_text,
                             dialogue_voice=dialogue_voice,
                             narration_voice=narration_voice,
                             thought_pitch=thought_pitch,
-                            pronunciation_entries=pronunciation_entries if pronunciation_entries else None,
+                            pronunciation_entries=None,
+                            text_is_preprocessed=True,
+                        )
+
+                        # Persist per-segment cache.
+                        seg.content_hash = desired_hash
+                        seg.audio_url = await _put_segment_audio(
+                            audio_bytes=audio,
+                            book_id=book_id,
+                            chapter_id=chapter.id,
+                            segment_idx=seg.segment_idx,
+                            content_hash=desired_hash,
                         )
 
                         chunk_file = tmp / f"{i:05d}.mp3"
@@ -308,23 +459,18 @@ async def run_generation(job_id: str, user_id: str) -> None:
                         logger.warning(
                             "generation: job=%s segment=%d failed: %s", job_id, i + 1, exc
                         )
-                        # Write silence placeholder so stitching still works
-                        chunk_paths.append(None)  # type: ignore[arg-type]
+                        # Write silence placeholder so stitching still works.
+                        chunk_file = tmp / f"{i:05d}.mp3"
+                        _write_silence_mp3(chunk_file)
+                        chunk_paths.append(chunk_file)
 
                     progress = int((i + 1) / total * 80)
                     await _set_job_status(session, job, JobStatus.PROCESSING, progress=progress)
 
                 # Stitch with FFmpeg
-                valid_chunks = [p for p in chunk_paths if p is not None]
-                if not valid_chunks:
-                    await _set_job_status(
-                        session, job, JobStatus.FAILED, error="All segments failed synthesis"
-                    )
-                    return
-
                 concat_list = tmp / "concat.txt"
                 concat_list.write_text(
-                    "\n".join(f"file '{p.as_posix()}'" for p in valid_chunks)
+                    "\n".join(f"file '{p.as_posix()}'" for p in chunk_paths)
                 )
                 output_mp3 = tmp / "chapter.mp3"
 

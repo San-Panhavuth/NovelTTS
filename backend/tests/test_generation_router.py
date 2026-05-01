@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime
-from types import SimpleNamespace
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 
+from app.config import settings
 from app.deps.auth import AuthUser
 from app.models.audio_job import AudioJob
 from app.models.book import Book
 from app.models.chapter import Chapter
 from app.models.enums import JobStatus
-from app.routers.generation import generate_chapter_audio, get_job_status
+from app.routers.generation import (
+    WorkerGenerateRequest,
+    generate_chapter_audio,
+    get_job_status,
+    internal_worker_audio_generate,
+)
 
 
 class _FakeScalarResult:
@@ -75,21 +80,32 @@ async def test_generate_chapter_audio_queues_job() -> None:
     )
     session = _FakeSession(chapter=chapter, book=book, latest_job=None)
     auth_user = AuthUser(id="user-1", email="u@example.com")
-    tasks = BackgroundTasks()
+    captured: dict[str, str] = {}
 
-    result = await generate_chapter_audio(
-        book_id=book.id,
-        chapter_idx=1,
-        background_tasks=tasks,
-        auth_user=auth_user,
-        session=session,  # type: ignore[arg-type]
-    )
+    async def _fake_enqueue(job_id: str, user_id: str) -> None:
+        captured["job_id"] = job_id
+        captured["user_id"] = user_id
+
+    import app.routers.generation as generation_module
+
+    old_enqueue = generation_module.enqueue_audio_generation_job
+    generation_module.enqueue_audio_generation_job = _fake_enqueue
+    try:
+        result = await generate_chapter_audio(
+            book_id=book.id,
+            chapter_idx=1,
+            auth_user=auth_user,
+            session=session,  # type: ignore[arg-type]
+        )
+    finally:
+        generation_module.enqueue_audio_generation_job = old_enqueue
 
     assert result.status == JobStatus.QUEUED
     assert result.job_id
     assert chapter.status == "generating"
     assert session.committed
-    assert len(tasks.tasks) == 1
+    assert captured["job_id"] == result.job_id
+    assert captured["user_id"] == auth_user.id
 
 
 @pytest.mark.asyncio
@@ -126,7 +142,6 @@ async def test_generate_chapter_audio_rejects_when_job_running() -> None:
         await generate_chapter_audio(
             book_id=book.id,
             chapter_idx=1,
-            background_tasks=BackgroundTasks(),
             auth_user=auth_user,
             session=session,  # type: ignore[arg-type]
         )
@@ -170,3 +185,27 @@ async def test_get_job_status_returns_job_payload() -> None:
     assert payload.job_id == "job-1"
     assert payload.status == JobStatus.COMPLETED
     assert payload.progress == 100
+
+
+@pytest.mark.asyncio
+async def test_internal_worker_endpoint_runs_generation() -> None:
+    captured: dict[str, str] = {}
+
+    async def _fake_run_generation(job_id: str, user_id: str) -> None:
+        captured["job_id"] = job_id
+        captured["user_id"] = user_id
+
+    import app.routers.generation as generation_module
+
+    old_run_generation = generation_module.run_generation
+    generation_module.run_generation = _fake_run_generation
+    try:
+        payload = await internal_worker_audio_generate(
+            body=WorkerGenerateRequest(job_id="job-123", user_id="user-123"),
+            x_worker_secret=settings.worker_shared_secret,
+        )
+    finally:
+        generation_module.run_generation = old_run_generation
+
+    assert payload["status"] == "accepted"
+    assert captured == {"job_id": "job-123", "user_id": "user-123"}

@@ -1,6 +1,6 @@
 # Development Plan: NovelTTS
 
-Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MVP)
+Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MVP) · 🛑 skipped (no longer needed)
 
 ---
 
@@ -69,7 +69,7 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
 
 ### Voice Catalog
 - ✅ Build Edge TTS voice catalog ingestion script (`scripts/ingest_edge_tts_voices.py`)
-- ✅ Manually tag all ~10 Kokoro voices (`scripts/seed_kokoro_voices.py`)
+- 🛑 Kokoro voice catalog/tagging (no longer needed)
 - ✅ Preview generation script (`scripts/generate_voice_previews.py` — run when TTS is ready)
 
 ### Data Model & API
@@ -82,9 +82,9 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
   - `GET /books/{id}/voice-settings` + `PUT /books/{id}/voice-settings` — per-book override
 
 ### Pronunciation Dictionary
-- ⬜ LLM infers phonetics for character names (Korean / Chinese), cultivation terms, place names
-- ⬜ Store `PronunciationEntry` per book
-- ⬜ SSML `<phoneme>` injector before TTS call
+- 🔄 LLM extracts candidate pronunciation terms from segments (`POST /books/{id}/pronunciations/infer`)
+- ✅ Store and manage `PronunciationEntry` per book (manual CRUD + inference-assisted flow)
+- ✅ Apply pronunciation overrides during generation (Edge path uses text substitution; SSML helper retained for future providers)
 
 ### Frontend
 - ✅ `/settings/voices` — user global defaults picker (narration voice, dialogue voice, thought pitch slider)
@@ -107,10 +107,10 @@ Status legend: ✅ done · 🔄 in progress · ⬜ todo · ⏭ deferred (post-MV
   - `GET /books/{id}/chapters/{index}/latest-job` → most recent job for chapter
 - ✅ Next.js API proxy routes (`/api/generate/[bookId]/[chapterIdx]`, `/api/jobs/[jobId]`)
 - ✅ Frontend: `AudioPlayer` client component — Generate button, progress bar, `<audio>` player
-- ⬜ Audio caching: skip regeneration when `(voice_id, text_hash)` matches
-- ⬜ Retry logic: max 3 retries per failed segment
-- ⬜ Kokoro provider (requires CUDA — Phase 4.5 when GPU available)
-- ⬜ BullMQ worker (upgrade from FastAPI BackgroundTasks when scale requires it)
+- ✅ Audio caching: skip regeneration when segment synthesis inputs are unchanged
+- ✅ Retry logic: max 3 retries per failed segment
+- 🛑 Kokoro provider (cancelled — not needed for MVP)
+- ✅ BullMQ worker (enqueue from backend, worker calls internal generation endpoint)
 
 **Done when**: clicking Generate produces a playable MP3. *(Edge TTS path is fully wired — test requires FFmpeg installed locally)*
 

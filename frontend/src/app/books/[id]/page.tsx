@@ -60,6 +60,7 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
             </Link>
             <Link
               href={`/books/${book.id}/voice-settings`}
+              prefetch={false}
               className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               🎙 Voice Settings

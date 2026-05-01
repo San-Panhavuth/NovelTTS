@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     r2_bucket: str = ""
     r2_public_url: str = ""
     tts_provider: str = "edge_tts"  # "edge_tts" | "kokoro"
+    redis_url: str = "redis://localhost:6379"
+    audio_generation_queue_name: str = "audio-generation"
+    worker_shared_secret: str = "dev-worker-secret"
 
     model_config = SettingsConfigDict(
         # Prefer workspace root env files for a single-source local setup.

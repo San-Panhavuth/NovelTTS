@@ -7,6 +7,7 @@ dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "boto3>=1.37.0",
+    "bullmq>=2.23.1",
     "ebooklib>=0.20",
     "edge-tts>=6.6.3",
     "fastapi>=0.136.0",
@@ -19,6 +20,13 @@ dependencies = [
     "python-multipart>=0.0.26",
     "sqlalchemy>=2.0.49",
     "uvicorn[standard]>=0.44.0",
+]
+
+[project.optional-dependencies]
+# Kokoro pulls in torch (large). Keep it optional so local dev + tests don't require torch.
+kokoro = [
+    "kokoro>=0.9.4",
+    "soundfile>=0.13.1",
 ]
 
 [dependency-groups]
