@@ -27,7 +27,13 @@
       "WebFetch(domain:supabase.com)",
       "WebFetch(domain:elevenlabs.io)",
       "WebFetch(domain:github.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npx tsc *)",
+      "Bash(pip install *)",
+      "Bash(alembic upgrade *)",
+      "PowerShell(Resolve-DnsName *)",
+      "PowerShell(Test-NetConnection *)",
+      "PowerShell(nslookup *)"
     ]
   }
 }

@@ -99,10 +99,22 @@ class SegmentCorrectionRequest(BaseModel):
 
 
 def _normalize_text(raw_html: str) -> str:
-    text = re.sub(r"<[^>]+>", " ", raw_html)
+    # Replace block-level closing tags with newlines to preserve paragraph breaks
+    text = re.sub(r"</(?:p|div|h[1-6]|li|tr|blockquote)>", "\n", raw_html, flags=re.IGNORECASE)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
     text = unescape(text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+    # Collapse consecutive blank lines to one
+    result: list[str] = []
+    prev_blank = False
+    for line in lines:
+        blank = not line
+        if blank and prev_blank:
+            continue
+        result.append(line)
+        prev_blank = blank
+    return "\n".join(result).strip()
 
 
 def _is_low_confidence(confidence: float | None) -> bool:
@@ -538,6 +550,20 @@ async def update_chapter_segment(
         confidence=segment.confidence,
         low_confidence=_is_low_confidence(segment.confidence),
     )
+
+
+@router.delete("/{book_id}", status_code=status.HTTP_200_OK)
+async def delete_book(
+    book_id: str,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    book = await session.get(Book, book_id)
+    if not book or book.user_id != auth_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    await session.delete(book)
+    await session.commit()
+    return {"success": True}
 
 
 @router.get(

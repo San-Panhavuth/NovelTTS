@@ -1,0 +1,225 @@
+============================================================
+  NovelTTS — Deployment Guide (Free Tier)
+============================================================
+
+ARCHITECTURE
+------------
+  Browser
+    └─> Vercel          (Next.js frontend)
+          └─> Render    (FastAPI backend  — Web Service)
+          └─> Render    (BullMQ worker    — Background Worker)
+
+  All services connect to:
+    Supabase   — Postgres database + Auth
+    Upstash    — Redis (job queue)
+    Cloudflare R2 — Audio MP3 storage
+    Gemini API — LLM attribution
+    Edge TTS   — TTS synthesis (called from backend/worker, no account needed)
+
+
+============================================================
+STEP 1 — Prepare environment files
+============================================================
+
+Copy the example files and fill in real values:
+
+  backend/  →  copy .env.example to .env
+  frontend/ →  copy .env.example to .env.local
+  worker/   →  copy .env.example to .env
+
+Key values you need:
+
+  DATABASE_URL
+    Format:  postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
+    Where:   Supabase dashboard → Project Settings → Database → Connection string (URI tab)
+    Note:    Replace PASSWORD with your actual DB password. Reset it there if forgotten.
+
+  NEXT_PUBLIC_SUPABASE_URL
+    Format:  https://PROJECT_REF.supabase.co
+    Where:   Supabase dashboard → Project Settings → API
+
+  NEXT_PUBLIC_SUPABASE_ANON_KEY  (also called publishable key in newer Supabase projects)
+    Where:   Supabase dashboard → Project Settings → API → anon / public key
+
+  SUPABASE_SERVICE_ROLE_KEY
+    Where:   Supabase dashboard → Project Settings → API → service_role key
+    WARNING: Keep this secret — never expose it in frontend code or public repos.
+
+  SUPABASE_JWT_SECRET
+    Where:   Supabase dashboard → Project Settings → API → JWT Secret
+
+  GEMINI_API_KEY
+    Where:   Google AI Studio → API Keys
+
+  UPSTASH_REDIS_URL
+    Format:  rediss://default:PASSWORD@HOST.upstash.io:PORT
+    Where:   Upstash dashboard → your Redis database → REST API or .env tab
+
+  R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME
+    Where:   Cloudflare dashboard → R2 → your bucket → Manage R2 API Tokens
+
+  INTERNAL_WORKER_SECRET
+    Format:  any long random string (e.g. generate with: openssl rand -hex 32)
+    Used:    backend verifies requests from the worker using this shared secret
+
+  NEXT_PUBLIC_BACKEND_URL
+    Value:   your Render backend URL (fill in after Step 3, e.g. https://noveltts-backend.onrender.com)
+
+
+============================================================
+STEP 2 — Run database migrations (Supabase Postgres)
+============================================================
+
+Run this once before deploying the backend. Uses Alembic.
+
+  cd backend
+  pip install -r requirements.txt
+  alembic upgrade head
+
+This creates all tables in your Supabase Postgres database.
+If you add new migrations later, re-run `alembic upgrade head`.
+
+
+============================================================
+STEP 3 — Deploy Backend (Render — Web Service)
+============================================================
+
+1. Go to https://render.com → New → Web Service
+2. Connect your GitHub repository
+3. Settings:
+     Name:            noveltts-backend  (or any name)
+     Root Directory:  backend
+     Runtime:         Python 3
+     Build command:   pip install -r requirements.txt
+     NOTE: requirements.txt was generated from pyproject.toml via `uv export`.
+           Re-run `uv export --no-dev --format requirements-txt -o requirements.txt`
+           from the backend/ folder whenever you add new dependencies.
+     Start command:   uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+4. Add all backend environment variables (from backend/.env):
+     DATABASE_URL
+     SUPABASE_URL
+     SUPABASE_SERVICE_ROLE_KEY
+     SUPABASE_JWT_SECRET
+     GEMINI_API_KEY
+     R2_ACCOUNT_ID
+     R2_ACCESS_KEY_ID
+     R2_SECRET_ACCESS_KEY
+     R2_BUCKET_NAME
+     UPSTASH_REDIS_URL
+     INTERNAL_WORKER_SECRET
+
+5. Deploy. Copy the URL Render gives you (e.g. https://noveltts-backend.onrender.com).
+   You will need this for Step 4 and Step 5.
+
+NOTE: Free tier web services on Render sleep after 15 minutes of inactivity.
+      First request after sleeping takes 30-60 seconds to respond.
+      Fix: add your backend URL to UptimeRobot (free) to ping it every 5 minutes.
+
+
+============================================================
+STEP 4 — Deploy Worker (Render — Background Worker)
+============================================================
+
+1. Go to Render → New → Background Worker
+2. Connect same GitHub repository
+3. Settings:
+     Name:            noveltts-worker
+     Root Directory:  worker
+     Runtime:         Node
+     Build command:   npm install && npm run build
+     Start command:   node dist/index.js
+
+4. Add worker environment variables (from worker/.env):
+     UPSTASH_REDIS_URL
+     BACKEND_INTERNAL_URL     (your Render backend URL from Step 3)
+     INTERNAL_WORKER_SECRET   (same secret as backend)
+
+5. Deploy.
+
+
+============================================================
+STEP 5 — Deploy Frontend (Vercel)
+============================================================
+
+1. Go to https://vercel.com → New Project → Import your GitHub repo
+2. Settings:
+     Framework:      Next.js  (auto-detected)
+     Root Directory: frontend
+
+3. Add environment variables:
+     NEXT_PUBLIC_SUPABASE_URL
+     NEXT_PUBLIC_SUPABASE_ANON_KEY
+     NEXT_PUBLIC_BACKEND_URL     (your Render backend URL from Step 3)
+
+4. Deploy. Vercel gives you a URL like https://noveltts.vercel.app.
+   Auto-deploys on every push to main.
+
+
+============================================================
+STEP 6 — Configure Supabase Auth redirect URLs
+============================================================
+
+After deploying the frontend, you must register the Vercel URL in Supabase
+so that Google OAuth and email confirmation redirects work correctly.
+
+1. Supabase dashboard → Authentication → URL Configuration
+2. Set Site URL to:        https://your-app.vercel.app
+3. Add to Redirect URLs:   https://your-app.vercel.app/auth/callback
+
+If you use a custom domain, add that URL too.
+
+
+============================================================
+STEP 7 — Verify deployment
+============================================================
+
+1. Visit your Vercel URL → sign up for an account
+2. Upload a small EPUB file
+3. Confirm the chapter list appears (proves DB connection works)
+4. Click Process on a chapter (proves backend + Gemini work)
+5. Click Generate on a chapter (proves worker + Edge TTS + R2 work)
+
+
+============================================================
+FREE TIER LIMITS (reference)
+============================================================
+
+  Vercel      — 100 GB bandwidth/month, unlimited deploys
+  Render      — 750 hours/month (1 service = always on), sleeps on idle
+  Supabase    — 500 MB database, 50,000 monthly active users
+                pauses after 1 week of no activity (unpauses on next request)
+  Upstash     — 10,000 Redis commands/day
+  Cloudflare R2 — 10 GB storage, no egress fees
+  Gemini API  — 1,500 requests/day, 15 requests/minute (free tier)
+  Edge TTS    — no quota (unofficial Microsoft API, free)
+
+
+============================================================
+COMMON ISSUES
+============================================================
+
+  Backend returns 401 on all requests
+    → Check SUPABASE_JWT_SECRET matches the value in Supabase dashboard exactly.
+
+  Alembic migration fails
+    → Check DATABASE_URL has ?sslmode=require at the end.
+    → Make sure your DB password has no special characters that break the URI,
+      or URL-encode them (e.g. @ → %40).
+
+  OAuth redirect goes to wrong URL
+    → Check Supabase Auth → URL Configuration → Redirect URLs includes your Vercel URL.
+
+  Audio generation never completes
+    → Check worker logs in Render dashboard.
+    → Confirm BACKEND_INTERNAL_URL and INTERNAL_WORKER_SECRET match between worker and backend.
+    → Check Upstash command usage (may have hit 10,000/day limit).
+
+  Supabase project is paused
+    → Log in to Supabase dashboard → click Restore on your project.
+    → Set up UptimeRobot to ping backend every day to keep activity alive.
+
+  Frontend cannot reach backend (CORS error)
+    → Add your Vercel URL to the CORS allowed origins in backend/app/main.py.
+
+============================================================

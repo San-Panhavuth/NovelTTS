@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageShell } from "@/app/components/page-shell";
+import { DeleteBookButton } from "@/app/components/delete-book-button";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
 import { apiGetWithAuth } from "@/lib/backend";
 
@@ -21,6 +22,7 @@ type BookDetail = {
 
 type BookDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ message?: string }>;
 };
 
 const statusBadge: Record<string, string> = {
@@ -32,7 +34,7 @@ const statusBadge: Record<string, string> = {
   failed: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
 };
 
-export default async function BookDetailPage({ params }: BookDetailPageProps) {
+export default async function BookDetailPage({ params, searchParams }: BookDetailPageProps) {
   if (!isSupabaseConfigured()) redirect("/login?message=Supabase env is not configured.");
 
   const supabase = await createSupabaseServerClient();
@@ -40,6 +42,7 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
   if (!user) redirect("/login");
 
   const { id } = await params;
+  const { message } = await searchParams;
 
   try {
     const book = await apiGetWithAuth<BookDetail>(`/books/${id}`);
@@ -63,11 +66,18 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
               prefetch={false}
               className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
-              🎙 Voice Settings
+              Voice Settings
             </Link>
+            <DeleteBookButton bookId={book.id} />
           </div>
         }
       >
+        {message && (
+          <div className="mb-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            {decodeURIComponent(message)}
+          </div>
+        )}
+
         <div className="space-y-2">
           {book.chapters.map((chapter) => (
             <Link
@@ -75,14 +85,7 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
               href={`/books/${book.id}/chapters/${chapter.chapter_idx}`}
               className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-5 py-4 hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
             >
-              <div>
-                <span className="font-medium">
-                  Chapter {chapter.chapter_idx + 1}
-                </span>
-                {chapter.title && (
-                  <span className="ml-2 text-zinc-500">— {chapter.title}</span>
-                )}
-              </div>
+              <span className="font-medium">Chapter {chapter.chapter_idx + 1}</span>
               <span
                 className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
                   statusBadge[chapter.status] ?? statusBadge.uploaded

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   addBookPronunciation,
+  apiDeleteWithAuth,
   apiGetWithAuth,
   apiPatchWithAuth,
   apiPostWithAuth,
@@ -303,6 +304,24 @@ export async function updateBookPronunciationEntry(formData: FormData) {
   }
 
   redirect(`/books/${bookId}/pronunciations?message=${encodeURIComponent(message)}`);
+}
+
+export async function deleteBook(formData: FormData) {
+  const bookId = formData.get("bookId");
+
+  if (typeof bookId !== "string") {
+    redirect("/library?message=Invalid+book+id.");
+  }
+
+  try {
+    await apiDeleteWithAuth<{ success: boolean }>(`/books/${bookId}`);
+    revalidatePath("/library");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Delete failed.";
+    redirect(`/books/${bookId}?message=${encodeURIComponent(message)}`);
+  }
+
+  redirect("/library");
 }
 
 export async function deleteBookPronunciationEntry(formData: FormData) {

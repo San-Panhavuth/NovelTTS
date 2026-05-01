@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SignOutForm } from "@/app/components/sign-out-form";
+import { PageShell } from "@/app/components/page-shell";
 import { PitchSlider } from "@/app/components/pitch-slider";
 import { VoicePicker } from "@/app/components/voice-picker";
 import { createSupabaseServerClient, isSupabaseConfigured } from "@/lib/supabase";
@@ -25,12 +24,8 @@ export default async function UserVoiceDefaultsPage({ searchParams }: VoiceDefau
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   const { message } = await searchParams;
 
@@ -45,53 +40,76 @@ export default async function UserVoiceDefaultsPage({ searchParams }: VoiceDefau
   ]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-6 py-10">
-      <section className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <Link href="/library" className="text-sm text-zinc-500 hover:underline">
-            ← Library
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">Global Voice Defaults</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Applied to all books unless overridden per book.
-          </p>
-        </div>
-        <SignOutForm />
-      </section>
-
+    <PageShell
+      title="Global Voice Defaults"
+      subtitle="Applied to all books unless overridden per book"
+      maxWidth="md"
+      breadcrumbs={[
+        { label: "Library", href: "/library" },
+        { label: "Voice Defaults" },
+      ]}
+    >
       {message && (
-        <p className="rounded-md bg-zinc-100 px-4 py-2 text-sm dark:bg-zinc-800">
+        <div className="mb-4 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm dark:bg-zinc-800">
           {decodeURIComponent(message)}
-        </p>
+        </div>
       )}
 
-      <form action={saveUserVoiceDefaults} className="flex flex-col gap-6">
-        <VoicePicker
-          label="Narration Voice"
-          name="narrationVoiceId"
-          voices={voices}
-          defaultValue={normalizeVoiceValue(defaults.narration_voice_id, voices)}
-          placeholder="(none)"
-        />
+      <form action={saveUserVoiceDefaults} className="space-y-4">
+        {/* Narration card */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-4 space-y-0.5">
+            <h2 className="text-sm font-semibold">Narration Voice</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Used for all non-dialogue, non-thought lines across every book.
+            </p>
+          </div>
+          <VoicePicker
+            label=""
+            name="narrationVoiceId"
+            voices={voices}
+            defaultValue={normalizeVoiceValue(defaults.narration_voice_id, voices)}
+            placeholder="(none)"
+          />
+        </div>
 
-        <VoicePicker
-          label="Dialogue Voice"
-          description="Also used for thought segments with the pitch offset applied below."
-          name="dialogueVoiceId"
-          voices={voices}
-          defaultValue={normalizeVoiceValue(defaults.dialogue_voice_id, voices)}
-          placeholder="(none)"
-        />
+        {/* Dialogue card */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-4 space-y-0.5">
+            <h2 className="text-sm font-semibold">Dialogue Voice</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Used for spoken dialogue. Also applies to thought lines with the pitch offset below.
+            </p>
+          </div>
+          <VoicePicker
+            label=""
+            name="dialogueVoiceId"
+            voices={voices}
+            defaultValue={normalizeVoiceValue(defaults.dialogue_voice_id, voices)}
+            placeholder="(none)"
+          />
+        </div>
 
-        <PitchSlider defaultValue={defaults.thought_pitch_semitones} />
+        {/* Thought pitch card */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-4 space-y-0.5">
+            <h2 className="text-sm font-semibold">Thought Pitch Offset</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Shifts the dialogue voice pitch for inner-thought segments. Negative = lower, softer feel.
+            </p>
+          </div>
+          <PitchSlider defaultValue={defaults.thought_pitch_semitones} />
+        </div>
 
-        <button
-          type="submit"
-          className="self-start rounded-md bg-zinc-900 px-6 py-2 text-sm text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          Save defaults
-        </button>
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit"
+            className="rounded-lg bg-zinc-900 px-6 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+          >
+            Save Defaults
+          </button>
+        </div>
       </form>
-    </main>
+    </PageShell>
   );
 }
