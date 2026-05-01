@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     r2_secret_access_key: str = ""
     r2_bucket: str = ""
     r2_public_url: str = ""
+    cors_origins: list[str] = ["http://localhost:3000", "https://novel-tts-frontend.vercel.app"]
     tts_provider: str = "edge_tts"  # "edge_tts" | "kokoro"
     redis_url: str = "redis://localhost:6379"
     audio_generation_queue_name: str = "audio-generation"
