@@ -4,6 +4,24 @@ Most recent on top. Each session ends with: **Completed · Next · Decisions · 
 
 ---
 
+## Session 2026-05-01 — Frontend build repaired after stale route cache and Supabase typing fix
+
+### Completed
+- Cleared the stale frontend build caches so Next stopped type-checking a removed `books/[id]/voices` route from generated validator output.
+- Fixed `frontend/src/lib/supabase.ts` by typing the `setAll` cookie batch parameter with Supabase SSR's cookie options shape.
+- Re-ran `npm run build` in `frontend/` and confirmed the production build completes successfully.
+
+### Next
+- Keep an eye on generated frontend caches if the same stale route validator error reappears after route renames.
+
+### Decisions
+- Treat the stale `books/[id]/voices` validator as a cache artifact, not a source route regression.
+
+### Blockers
+- none
+
+---
+
 ## Session 2026-04-28 — Phase 4 status corrected after code review
 
 ### Completed
