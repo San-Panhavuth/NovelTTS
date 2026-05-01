@@ -33,7 +33,16 @@
       "Bash(alembic upgrade *)",
       "PowerShell(Resolve-DnsName *)",
       "PowerShell(Test-NetConnection *)",
-      "PowerShell(nslookup *)"
+      "PowerShell(nslookup *)",
+      "Bash(python *)",
+      "Bash(Remove-Item *)",
+      "Bash(cmd /c rmdir /s /q .venv)",
+      "Bash(cmd /c \"attrib -r -s -h .venv\\\\lib64 2>nul & del /f /q .venv\\\\lib64 2>nul & rmdir /s /q .venv\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(cmd /c \"rmdir /s /q .venv\")",
+      "Bash(UV_LINK_MODE=copy uv sync)",
+      "Bash(powershell *)",
+      "Bash(uv run *)"
     ]
   }
 }

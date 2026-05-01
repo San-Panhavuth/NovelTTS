@@ -388,7 +388,6 @@ async def process_book_chapter(
                             book_id=book.id,
                             name=character_name,
                             role=None,
-                            voice_id=None,
                         )
                         session.add(character)
                         characters_by_name[key] = character
@@ -527,7 +526,6 @@ async def update_chapter_segment(
                 book_id=book.id,
                 name=character_name,
                 role=None,
-                voice_id=None,
             )
             session.add(character)
         character_id = character.id
