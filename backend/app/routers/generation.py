@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -17,7 +17,6 @@ from app.models.book import Book
 from app.models.chapter import Chapter
 from app.models.enums import JobStatus
 from app.services.audio_generation import run_generation
-from app.services.job_queue import enqueue_audio_generation_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["generation"])
@@ -64,6 +63,7 @@ async def _load_chapter(
 async def generate_chapter_audio(
     book_id: str,
     chapter_idx: int,
+    background_tasks: BackgroundTasks,
     auth_user: AuthUser = Depends(get_current_user),  # noqa: B008
     session: AsyncSession = Depends(get_db_session),  # noqa: B008
 ) -> GenerateResponse:
@@ -97,7 +97,7 @@ async def generate_chapter_audio(
     await session.commit()
 
     logger.info("generation: enqueued job=%s chapter=%s", job.id, chapter.id)
-    await enqueue_audio_generation_job(job.id, auth_user.id)
+    background_tasks.add_task(run_generation, job.id, auth_user.id)
 
     return GenerateResponse(job_id=job.id, status=JobStatus.QUEUED)
 
